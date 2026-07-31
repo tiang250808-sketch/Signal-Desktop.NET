@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>SignalCpf.Net</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SignalCpf.Core\SignalCpf.Core.csproj" />
+    <ProjectReference Include="..\SignalCpf.Protobuf\SignalCpf.Protobuf.csproj" />
+  </ItemGroup>
+</Project>

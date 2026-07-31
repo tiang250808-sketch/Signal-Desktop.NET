@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>SignalCpf.LibSignal.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SignalCpf.LibSignal\SignalCpf.LibSignal.csproj" />
+    <ProjectReference Include="..\SignalCpf.Storage\SignalCpf.Storage.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\native\signal_ffi.dll" Condition="Exists('..\native\signal_ffi.dll')"
+          CopyToOutputDirectory="PreserveNewest" Link="signal_ffi.dll" />
+  </ItemGroup>
+</Project>

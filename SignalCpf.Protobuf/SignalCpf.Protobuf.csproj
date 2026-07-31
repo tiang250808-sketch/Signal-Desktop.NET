@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>SignalCpf.Protobuf</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.67.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.69.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- CPF ↔ Sidecar IPC (gRPC) -->
+  <ItemGroup>
+    <Protobuf Include="..\contracts\signal_sidecar.proto"
+              GrpcServices="Client"
+              ProtoRoot="..\contracts" />
+  </ItemGroup>
+
+  <!-- Signal wire-format protos (reference copy from Signal-Desktop/protos) -->
+  <ItemGroup>
+    <Protobuf Include="Protos\SignalService.proto"
+              GrpcServices="None"
+              ProtoRoot="Protos" />
+    <Protobuf Include="Protos\DeviceMessages.proto"
+              GrpcServices="None"
+              ProtoRoot="Protos" />
+    <Protobuf Include="Protos\DeviceName.proto"
+              GrpcServices="None"
+              ProtoRoot="Protos" />
+    <Protobuf Include="Protos\Groups.proto"
+              GrpcServices="None"
+              ProtoRoot="Protos" />
+    <Protobuf Include="Protos\SignalStorage.proto"
+              GrpcServices="None"
+              ProtoRoot="Protos" />
+    <Protobuf Include="Protos\WebSocketResources.proto"
+              GrpcServices="None"
+              ProtoRoot="Protos" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,66 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalCpf.Core", "SignalCpf.Core\SignalCpf.Core.csproj", "{A1111111-1111-1111-1111-111111111111}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalCpf.Protocol", "SignalCpf.Protocol\SignalCpf.Protocol.csproj", "{A1111111-1111-1111-1111-111111111112}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalCpf.Protobuf", "SignalCpf.Protobuf\SignalCpf.Protobuf.csproj", "{A1111111-1111-1111-1111-111111111113}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalCpf.Net", "SignalCpf.Net\SignalCpf.Net.csproj", "{A1111111-1111-1111-1111-111111111114}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalCpf.Storage", "SignalCpf.Storage\SignalCpf.Storage.csproj", "{A1111111-1111-1111-1111-111111111115}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalCpf.LibSignal", "SignalCpf.LibSignal\SignalCpf.LibSignal.csproj", "{A1111111-1111-1111-1111-111111111116}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalCpf.Client", "SignalCpf.Client\SignalCpf.Client.csproj", "{A1111111-1111-1111-1111-111111111117}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalCpf.UI", "SignalCpf.UI\SignalCpf.UI.csproj", "{A1111111-1111-1111-1111-111111111118}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalCpf.LibSignal.Tests", "SignalCpf.LibSignal.Tests\SignalCpf.LibSignal.Tests.csproj", "{A1111111-1111-1111-1111-111111111119}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A1111111-1111-1111-1111-111111111111}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111111}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111111}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111111}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111112}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111112}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111112}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111112}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111113}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111113}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111113}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111113}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111114}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111114}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111114}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111114}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111115}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111115}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111115}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111115}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111116}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111116}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111116}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111116}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111117}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111117}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111117}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111117}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111118}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111118}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111118}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111118}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111119}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111119}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1111111-1111-1111-1111-111111111119}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1111111-1111-1111-1111-111111111119}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

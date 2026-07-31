@@ -1,0 +1,140 @@
+syntax = "proto3";
+
+package signal.sidecar.v1;
+
+option csharp_namespace = "SignalCpf.Contracts.V1";
+
+// Phase 0 IPC shapes mirrored by ISignalSidecarClient.
+// gRPC path is deprecated; kept for Mock/legacy interop.
+
+message AccountStatus {
+  bool is_registered = 1;
+  string service_id = 2;
+  string pni = 3;
+  int32 device_id = 4;
+  string device_name = 5;
+  string number = 6;
+}
+
+message Conversation {
+  string id = 1;
+  string service_id = 2;
+  string title = 3;
+  string last_message_preview = 4;
+  int64 last_message_at_ms = 5;
+  int32 unread_count = 6;
+  bool is_group = 7;
+}
+
+message Message {
+  string id = 1;
+  string conversation_id = 2;
+  string sender_service_id = 3;
+  string body = 4;
+  int64 sent_at_ms = 5;
+  int64 received_at_ms = 6;
+  bool is_outgoing = 7;
+  MessageStatus status = 8;
+}
+
+message ProvisioningQr {
+  string url = 1;
+  bytes qr_png = 2;
+}
+
+message ProvisioningProgress {
+  ProvisioningProgressKind kind = 1;
+  string message = 2;
+  ProvisioningQr qr = 3;
+}
+
+message SidecarError {
+  string code = 1;
+  string message = 2;
+}
+
+message SidecarEvent {
+  oneof payload {
+    Message received_message = 1;
+    Conversation conversation_updated = 2;
+    AccountStatus account_status_changed = 3;
+    ProvisioningProgress provisioning_progress = 4;
+    SidecarError error = 5;
+  }
+}
+
+message HealthRequest {}
+message HealthResponse {
+  bool ready = 1;
+  string version = 2;
+}
+
+message GetAccountStatusRequest {}
+message GetAccountStatusResponse {
+  AccountStatus status = 1;
+}
+
+message StartProvisioningRequest {
+  string device_name = 1;
+}
+message StartProvisioningResponse {
+  ProvisioningQr qr = 1;
+}
+
+message CancelProvisioningRequest {}
+message CancelProvisioningResponse {}
+
+message ListConversationsRequest {
+  int32 limit = 1;
+}
+message ListConversationsResponse {
+  repeated Conversation conversations = 1;
+}
+
+message GetMessagesRequest {
+  string conversation_id = 1;
+  int32 limit = 2;
+}
+message GetMessagesResponse {
+  repeated Message messages = 1;
+}
+
+message SendTextMessageRequest {
+  string conversation_id = 1;
+  string recipient_service_id = 2;
+  string body = 3;
+}
+message SendTextMessageResponse {
+  Message message = 1;
+}
+
+message SubscribeEventsRequest {}
+
+enum MessageStatus {
+  MESSAGE_STATUS_UNSPECIFIED = 0;
+  MESSAGE_STATUS_PENDING = 1;
+  MESSAGE_STATUS_SENT = 2;
+  MESSAGE_STATUS_DELIVERED = 3;
+  MESSAGE_STATUS_READ = 4;
+  MESSAGE_STATUS_FAILED = 5;
+}
+
+enum ProvisioningProgressKind {
+  PROVISIONING_PROGRESS_KIND_UNSPECIFIED = 0;
+  PROVISIONING_PROGRESS_KIND_QR_READY = 1;
+  PROVISIONING_PROGRESS_KIND_WAITING_FOR_SCAN = 2;
+  PROVISIONING_PROGRESS_KIND_LINKED = 3;
+  PROVISIONING_PROGRESS_KIND_FAILED = 4;
+  PROVISIONING_PROGRESS_KIND_TIMEOUT = 5;
+}
+
+service SignalSidecar {
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc GetAccountStatus(GetAccountStatusRequest) returns (GetAccountStatusResponse);
+  rpc StartProvisioning(StartProvisioningRequest) returns (StartProvisioningResponse);
+  rpc CancelProvisioning(CancelProvisioningRequest) returns (CancelProvisioningResponse);
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+  rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse);
+  rpc SendTextMessage(SendTextMessageRequest) returns (SendTextMessageResponse);
+  rpc SubscribeEvents(SubscribeEventsRequest) returns (stream SidecarEvent);
+}

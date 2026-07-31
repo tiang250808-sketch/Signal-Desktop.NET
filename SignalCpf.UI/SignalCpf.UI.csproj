@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RootNamespace>SignalCpf.UI</RootNamespace>
+    <!-- SkiaSharp ships legacy tizen-* RIDs; harmless on .NET 8+ non-Tizen apps. -->
+    <NoWarn>$(NoWarn);NETSDK1206</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Xhm.CPF" Version="0.9.6.10" />
+    <PackageReference Include="Xhm.CPF.Windows" Version="0.9.6.10" />
+    <PackageReference Include="Xhm.CPF.Skia" Version="0.9.6.10" />
+    <PackageReference Include="Xhm.CPF.Linux" Version="0.9.6.10" />
+    <PackageReference Include="Xhm.CPF.Mac" Version="0.9.6.10" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageReference Include="Net.Codecrete.QrCodeGenerator" Version="2.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SignalCpf.Core\SignalCpf.Core.csproj" />
+    <ProjectReference Include="..\SignalCpf.Client\SignalCpf.Client.csproj" />
+  </ItemGroup>
+
+  <!-- Optional native libsignal FFI (built via scripts/build-libsignal-ffi.ps1). -->
+  <ItemGroup>
+    <None Include="..\native\signal_ffi.dll" Condition="Exists('..\native\signal_ffi.dll')"
+          CopyToOutputDirectory="PreserveNewest" Link="signal_ffi.dll" />
+    <None Include="..\native\libsignal_ffi.so" Condition="Exists('..\native\libsignal_ffi.so')"
+          CopyToOutputDirectory="PreserveNewest" Link="libsignal_ffi.so" />
+    <None Include="..\native\libsignal_ffi.dylib" Condition="Exists('..\native\libsignal_ffi.dylib')"
+          CopyToOutputDirectory="PreserveNewest" Link="libsignal_ffi.dylib" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,11 @@
+<Solution>
+  <Project Path="SignalCpf.Client/SignalCpf.Client.csproj" />
+  <Project Path="SignalCpf.Core/SignalCpf.Core.csproj" />
+  <Project Path="SignalCpf.Protobuf/SignalCpf.Protobuf.csproj" />
+  <Project Path="SignalCpf.Protocol/SignalCpf.Protocol.csproj" />
+  <Project Path="SignalCpf.Net/SignalCpf.Net.csproj" />
+  <Project Path="SignalCpf.Storage/SignalCpf.Storage.csproj" />
+  <Project Path="SignalCpf.LibSignal/SignalCpf.LibSignal.csproj" />
+  <Project Path="SignalCpf.UI/SignalCpf.UI.csproj" />
+  <Project Path="SignalCpf.LibSignal.Tests/SignalCpf.LibSignal.Tests.csproj" />
+</Solution>

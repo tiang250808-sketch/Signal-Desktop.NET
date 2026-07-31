@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>SignalCpf.Client</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SignalCpf.Core\SignalCpf.Core.csproj" />
+    <ProjectReference Include="..\SignalCpf.Protobuf\SignalCpf.Protobuf.csproj" />
+    <ProjectReference Include="..\SignalCpf.Protocol\SignalCpf.Protocol.csproj" />
+    <ProjectReference Include="..\SignalCpf.Net\SignalCpf.Net.csproj" />
+    <ProjectReference Include="..\SignalCpf.Storage\SignalCpf.Storage.csproj" />
+    <ProjectReference Include="..\SignalCpf.LibSignal\SignalCpf.LibSignal.csproj" />
+  </ItemGroup>
+</Project>

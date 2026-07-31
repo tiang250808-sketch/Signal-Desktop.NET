@@ -7,6 +7,9 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/Dotnet.gitignore
 
+# Dot-directories (e.g. .deps, .vs, .cursor) — keep .gitignore itself tracked
+.*/
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
