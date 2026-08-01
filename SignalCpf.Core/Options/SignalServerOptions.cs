@@ -157,7 +157,7 @@ public sealed class SignalServerOptions
     private static SignalServerProfile ParseProfile(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
-            return SignalServerProfile.SelfHosted;
+            return SignalServerProfile.Official;
 
         return raw.Trim().ToLowerInvariant() switch
         {
