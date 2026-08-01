@@ -56,11 +56,33 @@ public sealed record ProvisioningProgress(
     string? Message = null,
     ProvisioningQr? Qr = null);
 
+public enum RegistrationProgressKind
+{
+    Unspecified = 0,
+    SessionCreated = 1,
+    CaptchaRequired = 2,
+    CodeRequested = 3,
+    Verified = 4,
+    Registered = 5,
+    Failed = 6,
+}
+
+public sealed record RegistrationSessionStatus(
+    RegistrationProgressKind Kind,
+    string? Message = null,
+    string? SessionId = null,
+    string? Number = null,
+    bool CaptchaRequired = false,
+    bool AllowedToRequestCode = false,
+    bool Verified = false,
+    string? ChallengeUrl = null);
+
 public abstract record SidecarEvent
 {
     public sealed record MessageReceived(ChatMessage Message) : SidecarEvent;
     public sealed record ConversationUpdated(Conversation Conversation) : SidecarEvent;
     public sealed record AccountStatusChanged(AccountStatus Status) : SidecarEvent;
     public sealed record ProvisioningUpdated(ProvisioningProgress Progress) : SidecarEvent;
+    public sealed record RegistrationUpdated(RegistrationSessionStatus Status) : SidecarEvent;
     public sealed record Error(string Code, string Message) : SidecarEvent;
 }

@@ -17,7 +17,8 @@ public sealed record ClientSettings(
     bool UsesNativeLibSignal,
     string ServerProfile = "SelfHosted",
     string? CdnUrl = null,
-    string? StorageUrl = null);
+    string? StorageUrl = null,
+    string? ChallengeUrl = null);
 
 public sealed record AttachmentInfo(
     string Id,

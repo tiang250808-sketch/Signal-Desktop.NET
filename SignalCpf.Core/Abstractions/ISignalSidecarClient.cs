@@ -19,6 +19,30 @@ public interface ISignalSidecarClient : IAsyncDisposable
 
     Task CancelProvisioningAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Begin primary-device phone registration (verification session + optional captcha + SMS/voice code).
+    /// </summary>
+    Task<RegistrationSessionStatus> StartPhoneRegistrationAsync(
+        string e164Number,
+        string? captchaToken = null,
+        string transport = "sms",
+        CancellationToken cancellationToken = default);
+
+    Task<RegistrationSessionStatus> SubmitRegistrationCaptchaAsync(
+        string captchaToken,
+        CancellationToken cancellationToken = default);
+
+    Task<RegistrationSessionStatus> RequestRegistrationCodeAsync(
+        string transport = "sms",
+        CancellationToken cancellationToken = default);
+
+    Task<AccountStatus> CompletePhoneRegistrationAsync(
+        string verificationCode,
+        string deviceName,
+        CancellationToken cancellationToken = default);
+
+    Task CancelRegistrationAsync(CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Conversation>> ListConversationsAsync(
         int limit = 50,
         CancellationToken cancellationToken = default);

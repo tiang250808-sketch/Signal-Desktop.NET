@@ -38,6 +38,15 @@ dotnet run --project SignalCpf.UI
 
 Settings should show `配置档: Official` and `libsignal FFI: True`.
 
+### Account setup
+
+On first launch the install screen offers two modes:
+
+- **关联设备** — QR link to an existing primary phone (linked device)
+- **注册账户** — primary registration with E.164 phone + SMS/voice code (optional captcha paste)
+
+Self-hosted servers must implement `/v1/verification/session` and `/v1/registration`. Official/staging usually require captcha + `signal_ffi`.
+
 See [docs/server-config.md](docs/server-config.md) and [docs/libsignal-ffi-research.md](docs/libsignal-ffi-research.md).
 
 ## Compliance

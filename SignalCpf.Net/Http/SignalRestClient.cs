@@ -33,6 +33,9 @@ public sealed class SignalRestClient : IDisposable
     public void SetLinkAuth(string aci, string password) =>
         _auth = SignalAuth.LinkBasic(aci, password);
 
+    public void SetNumberAuth(string e164, string password) =>
+        _auth = SignalAuth.NumberBasic(e164, password);
+
     public void ClearAuth() => _auth = null;
 
     public async Task<bool> HealthAsync(CancellationToken ct = default)
@@ -67,6 +70,102 @@ public sealed class SignalRestClient : IDisposable
         var parsed = JsonSerializer.Deserialize<LinkDeviceResponse>(text, JsonOpts)
                      ?? throw new SignalApiException((int)resp.StatusCode, "Empty linkDevice response");
         return parsed;
+    }
+
+    public async Task<VerificationSessionResponse> CreateVerificationSessionAsync(
+        CreateVerificationSessionRequest body,
+        CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, "v1/verification/session")
+        {
+            Content = JsonContent.Create(body, options: JsonOpts),
+        };
+        using var resp = await _http.SendAsync(req, ct);
+        return await ReadVerificationSessionAsync(resp, ct);
+    }
+
+    public async Task<VerificationSessionResponse> UpdateVerificationSessionAsync(
+        string sessionId,
+        UpdateVerificationSessionRequest body,
+        CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"v1/verification/session/{Uri.EscapeDataString(sessionId)}")
+        {
+            Content = JsonContent.Create(body, options: JsonOpts),
+        };
+        using var resp = await _http.SendAsync(req, ct);
+        return await ReadVerificationSessionAsync(resp, ct);
+    }
+
+    public async Task<VerificationSessionResponse> RequestVerificationCodeAsync(
+        string sessionId,
+        VerificationCodeRequest body,
+        CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"v1/verification/session/{Uri.EscapeDataString(sessionId)}/code")
+        {
+            Content = JsonContent.Create(body, options: JsonOpts),
+        };
+        using var resp = await _http.SendAsync(req, ct);
+        return await ReadVerificationSessionAsync(resp, ct);
+    }
+
+    public async Task<VerificationSessionResponse> SubmitVerificationCodeAsync(
+        string sessionId,
+        SubmitVerificationCodeRequest body,
+        CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"v1/verification/session/{Uri.EscapeDataString(sessionId)}/code")
+        {
+            Content = JsonContent.Create(body, options: JsonOpts),
+        };
+        using var resp = await _http.SendAsync(req, ct);
+        return await ReadVerificationSessionAsync(resp, ct);
+    }
+
+    public async Task<AccountCreationResponse> RegisterAccountAsync(
+        RegistrationRequest body,
+        CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, "v1/registration")
+        {
+            Content = JsonContent.Create(body, options: JsonOpts),
+        };
+        ApplyAuth(req);
+        using var resp = await _http.SendAsync(req, ct);
+        var text = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new SignalApiException((int)resp.StatusCode, text);
+
+        var parsed = JsonSerializer.Deserialize<AccountCreationResponse>(text, JsonOpts)
+                     ?? throw new SignalApiException((int)resp.StatusCode, "Empty registration response");
+        return parsed;
+    }
+
+    private static async Task<VerificationSessionResponse> ReadVerificationSessionAsync(
+        HttpResponseMessage resp,
+        CancellationToken ct)
+    {
+        var text = await resp.Content.ReadAsStringAsync(ct);
+        // 409/429/418 often still return a session body the client should inspect.
+        if ((int)resp.StatusCode is 409 or 429 or 418)
+        {
+            var conflict = JsonSerializer.Deserialize<VerificationSessionResponse>(text, JsonOpts);
+            if (conflict is not null && !string.IsNullOrEmpty(conflict.Id))
+                return conflict;
+        }
+
+        if (!resp.IsSuccessStatusCode)
+            throw new SignalApiException((int)resp.StatusCode, text);
+
+        return JsonSerializer.Deserialize<VerificationSessionResponse>(text, JsonOpts)
+               ?? throw new SignalApiException((int)resp.StatusCode, "Empty verification session response");
     }
 
     public async Task RegisterPreKeysAsync(
@@ -219,7 +318,80 @@ public sealed class AccountAttributes
     public int RegistrationId { get; set; }
     public int PniRegistrationId { get; set; }
     public string? Name { get; set; }
-    public int Capabilities { get; set; }
+    /// <summary>Legacy numeric capabilities (link-device / older forks).</summary>
+    public int? Capabilities { get; set; }
+}
+
+/// <summary>Account attributes for primary registration (capability map + UAK).</summary>
+public sealed class RegistrationAccountAttributes
+{
+    public bool FetchesMessages { get; set; } = true;
+    public int RegistrationId { get; set; }
+    public int PniRegistrationId { get; set; }
+    public string? Name { get; set; }
+    public Dictionary<string, bool>? Capabilities { get; set; }
+    public string? UnidentifiedAccessKey { get; set; }
+    public bool UnrestrictedUnidentifiedAccess { get; set; }
+    public bool DiscoverableByPhoneNumber { get; set; } = true;
+}
+
+public sealed class CreateVerificationSessionRequest
+{
+    public string Number { get; set; } = "";
+    public string? Captcha { get; set; }
+}
+
+public sealed class UpdateVerificationSessionRequest
+{
+    public string? Captcha { get; set; }
+    public string? PushToken { get; set; }
+    public string? PushTokenType { get; set; }
+    public string? PushChallenge { get; set; }
+}
+
+public sealed class VerificationCodeRequest
+{
+    public string Transport { get; set; } = "sms";
+    /// <summary>Server maps "ios" → IOS client type (used by Desktop).</summary>
+    public string Client { get; set; } = "ios";
+}
+
+public sealed class SubmitVerificationCodeRequest
+{
+    public string Code { get; set; } = "";
+}
+
+public sealed class VerificationSessionResponse
+{
+    public string Id { get; set; } = "";
+    public long? NextSms { get; set; }
+    public long? NextCall { get; set; }
+    public long? NextVerificationAttempt { get; set; }
+    public bool AllowedToRequestCode { get; set; }
+    public List<string>? RequestedInformation { get; set; }
+    public bool Verified { get; set; }
+}
+
+public sealed class RegistrationRequest
+{
+    public string? SessionId { get; set; }
+    public RegistrationAccountAttributes AccountAttributes { get; set; } = new();
+    public bool SkipDeviceTransfer { get; set; } = true;
+    public string AciIdentityKey { get; set; } = "";
+    public string PniIdentityKey { get; set; } = "";
+    public SignedPreKeyEntity? AciSignedPreKey { get; set; }
+    public SignedPreKeyEntity? PniSignedPreKey { get; set; }
+    public KyberPreKeyEntity? AciPqLastResortPreKey { get; set; }
+    public KyberPreKeyEntity? PniPqLastResortPreKey { get; set; }
+}
+
+public sealed class AccountCreationResponse
+{
+    public string? Uuid { get; set; }
+    public string? Number { get; set; }
+    public string? Pni { get; set; }
+    public bool StorageCapable { get; set; }
+    public bool Reregistration { get; set; }
 }
 
 public sealed class SignedPreKeyEntity

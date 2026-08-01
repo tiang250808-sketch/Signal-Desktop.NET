@@ -21,6 +21,8 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsShowingInstallScreen))]
     [NotifyPropertyChangedFor(nameof(IsShowingChat))]
     [NotifyPropertyChangedFor(nameof(IsShowingQrCard))]
+    [NotifyPropertyChangedFor(nameof(IsShowingLinkMode))]
+    [NotifyPropertyChangedFor(nameof(IsShowingRegisterMode))]
     private bool _isRegistered;
 
     [ObservableProperty]
@@ -39,6 +41,37 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsShowingQrCard))]
     private bool _isLinkInProgress;
+
+    /// <summary>false = link device (QR), true = phone registration.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsShowingLinkMode))]
+    [NotifyPropertyChangedFor(nameof(IsShowingRegisterMode))]
+    [NotifyPropertyChangedFor(nameof(IsShowingQrCard))]
+    private bool _isRegisterMode;
+
+    [ObservableProperty]
+    private string _registerPhoneNumber = string.Empty;
+
+    [ObservableProperty]
+    private string _registerCaptchaToken = string.Empty;
+
+    [ObservableProperty]
+    private string _registerVerificationCode = string.Empty;
+
+    [ObservableProperty]
+    private bool _registerUseVoice;
+
+    [ObservableProperty]
+    private bool _registerCaptchaRequired;
+
+    [ObservableProperty]
+    private string? _registerChallengeUrl;
+
+    [ObservableProperty]
+    private bool _isRegisterBusy;
+
+    [ObservableProperty]
+    private bool _registerCodeSent;
 
     [ObservableProperty]
     private ConversationItemViewModel? _selectedConversation;
@@ -70,7 +103,10 @@ public partial class MainViewModel : ObservableObject
     public bool IsShowingChat => IsRegistered;
     public bool IsShowingChatMain => IsRegistered && !SettingsOpen;
     public bool IsShowingSettings => IsRegistered && SettingsOpen;
-    public bool IsShowingQrCard => !IsRegistered && !IsLinkInProgress && !IsQrLoading;
+    public bool IsShowingLinkMode => !IsRegistered && !IsRegisterMode;
+    public bool IsShowingRegisterMode => !IsRegistered && IsRegisterMode;
+    public bool IsShowingQrCard =>
+        !IsRegistered && !IsRegisterMode && !IsLinkInProgress && !IsQrLoading;
 
     public ObservableCollection<ConversationItemViewModel> Conversations { get; } = [];
     public ObservableCollection<MessageItemViewModel> Messages { get; } = [];
@@ -117,8 +153,12 @@ public partial class MainViewModel : ObservableObject
                 await RefreshConversationsAsync();
                 await RefreshContactsAsync();
             }
-            else if (reachable || string.Equals(settings.ServerProfile, "Official", StringComparison.OrdinalIgnoreCase))
+            else if (!IsRegisterMode
+                     && (reachable
+                         || string.Equals(settings.ServerProfile, "Official", StringComparison.OrdinalIgnoreCase)))
+            {
                 await StartProvisioningAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -132,18 +172,51 @@ public partial class MainViewModel : ObservableObject
         if (account.IsRegistered)
         {
             IsLinkInProgress = false;
+            IsRegisterBusy = false;
             ClearQr();
-            StatusText = $"已关联：{account.DeviceName ?? account.ServiceId}";
+            StatusText = account.DeviceId <= 1
+                ? $"已注册：{account.Number ?? account.DeviceName ?? account.ServiceId}"
+                : $"已关联：{account.DeviceName ?? account.ServiceId}";
         }
-        else
+        else if (!IsRegisterMode)
         {
-            StatusText = "未注册 — 请扫描二维码关联设备";
+            StatusText = "未注册 — 请扫描二维码关联设备，或切换到「注册账户」";
         }
+    }
+
+    [RelayCommand]
+    private async Task SwitchToLinkModeAsync()
+    {
+        if (!IsRegisterMode)
+            return;
+        await _client.CancelRegistrationAsync();
+        IsRegisterMode = false;
+        RegisterCaptchaRequired = false;
+        RegisterCodeSent = false;
+        StatusText = "关联设备模式";
+        await StartProvisioningAsync();
+    }
+
+    [RelayCommand]
+    private async Task SwitchToRegisterModeAsync()
+    {
+        if (IsRegisterMode)
+            return;
+        await _client.CancelProvisioningAsync();
+        ClearQr();
+        IsLinkInProgress = false;
+        IsQrLoading = false;
+        IsRegisterMode = true;
+        StatusText = "注册账户：输入 E.164 手机号获取验证码";
+        await RefreshSettingsAsync();
     }
 
     [RelayCommand]
     private async Task StartProvisioningAsync()
     {
+        if (IsRegisterMode)
+            return;
+
         try
         {
             IsLinkInProgress = false;
@@ -169,6 +242,140 @@ public partial class MainViewModel : ObservableObject
         {
             IsQrLoading = false;
         }
+    }
+
+    [RelayCommand]
+    private async Task StartPhoneRegistrationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(RegisterPhoneNumber))
+        {
+            StatusText = "请输入 E.164 手机号（如 +8613812345678）";
+            return;
+        }
+
+        try
+        {
+            IsRegisterBusy = true;
+            StatusText = "正在创建验证会话…";
+            var transport = RegisterUseVoice ? "voice" : "sms";
+            var captcha = string.IsNullOrWhiteSpace(RegisterCaptchaToken)
+                ? null
+                : RegisterCaptchaToken.Trim();
+            var status = await _client.StartPhoneRegistrationAsync(
+                RegisterPhoneNumber.Trim(),
+                captcha,
+                transport);
+            ApplyRegistrationStatus(status);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"注册失败：{RootMessage(ex)}";
+        }
+        finally
+        {
+            IsRegisterBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task SubmitRegistrationCaptchaAsync()
+    {
+        if (string.IsNullOrWhiteSpace(RegisterCaptchaToken))
+        {
+            StatusText = "请粘贴 Captcha token（来自浏览器 signalcaptcha://…）";
+            return;
+        }
+
+        try
+        {
+            IsRegisterBusy = true;
+            StatusText = "正在提交 Captcha…";
+            var status = await _client.SubmitRegistrationCaptchaAsync(RegisterCaptchaToken.Trim());
+            ApplyRegistrationStatus(status);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Captcha 失败：{RootMessage(ex)}";
+        }
+        finally
+        {
+            IsRegisterBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task RequestRegistrationCodeAsync()
+    {
+        try
+        {
+            IsRegisterBusy = true;
+            StatusText = "正在请求验证码…";
+            var status = await _client.RequestRegistrationCodeAsync(
+                RegisterUseVoice ? "voice" : "sms");
+            ApplyRegistrationStatus(status);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"请求验证码失败：{RootMessage(ex)}";
+        }
+        finally
+        {
+            IsRegisterBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task CompletePhoneRegistrationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(RegisterVerificationCode))
+        {
+            StatusText = "请输入短信/语音验证码";
+            return;
+        }
+
+        try
+        {
+            IsRegisterBusy = true;
+            StatusText = "正在验证并创建账户…";
+            var account = await _client.CompletePhoneRegistrationAsync(
+                RegisterVerificationCode.Trim(),
+                DeviceName);
+            ApplyAccount(account);
+            if (account.IsRegistered)
+            {
+                await RefreshConversationsAsync();
+                await RefreshContactsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"完成注册失败：{RootMessage(ex)}";
+        }
+        finally
+        {
+            IsRegisterBusy = false;
+        }
+    }
+
+    private void ApplyRegistrationStatus(RegistrationSessionStatus status)
+    {
+        RegisterCaptchaRequired = status.CaptchaRequired;
+        RegisterChallengeUrl = status.ChallengeUrl;
+        RegisterCodeSent = status.Kind is RegistrationProgressKind.CodeRequested
+            or RegistrationProgressKind.Verified
+            or RegistrationProgressKind.Registered;
+        if (!string.IsNullOrWhiteSpace(status.Message))
+            StatusText = status.Message;
+    }
+
+    private static string RootMessage(Exception ex)
+    {
+        var root = ex;
+        while (root.InnerException is not null)
+            root = root.InnerException;
+        return root.Message == ex.Message
+            ? ex.Message
+            : $"{ex.Message}（{root.Message}）";
     }
 
     private void ApplyProvisioningUrl(string? url)
@@ -211,9 +418,12 @@ public partial class MainViewModel : ObservableObject
         var s = await _client.GetSettingsAsync();
         NotificationsEnabled = s.NotificationsEnabled;
         ServerUrlDisplay = s.ApiBaseUrl;
+        if (!string.IsNullOrWhiteSpace(s.ChallengeUrl))
+            RegisterChallengeUrl = s.ChallengeUrl;
         SettingsSummary =
             $"配置档: {s.ServerProfile}\n服务器: {s.ApiBaseUrl}\nCDN: {s.CdnUrl ?? "(same as API)"}\n" +
-            $"Storage: {s.StorageUrl ?? "(unset)"}\n数据目录: {s.DataDirectory}\n设备名: {s.DeviceName}\n" +
+            $"Storage: {s.StorageUrl ?? "(unset)"}\nCaptcha: {s.ChallengeUrl ?? "(unset)"}\n" +
+            $"数据目录: {s.DataDirectory}\n设备名: {s.DeviceName}\n" +
             $"TLS 不安全模式: {s.AllowInsecureTls}\nPQ 密钥: {s.EnablePqKeys}\n" +
             $"通知: {s.NotificationsEnabled}\n已读回执: {s.ReadReceiptsEnabled}\n" +
             $"libsignal FFI: {s.UsesNativeLibSignal}";
@@ -351,6 +561,9 @@ public partial class MainViewModel : ObservableObject
                 break;
             case SidecarEvent.ProvisioningUpdated p:
                 HandleProvisioningProgress(p.Progress);
+                break;
+            case SidecarEvent.RegistrationUpdated r:
+                ApplyRegistrationStatus(r.Status);
                 break;
             case SidecarEvent.MessageReceived m when
                 SelectedConversation?.Id == m.Message.ConversationId:

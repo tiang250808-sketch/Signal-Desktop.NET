@@ -93,18 +93,351 @@ public class MainWindow : Window
                     CornerRadius = "8",
                     BorderFill = "#E5E7EB",
                     BorderStroke = "1",
-                    Child = new Grid
+                    Child = new StackPanel
                     {
-                        ColumnDefinitions =
-                        {
-                            new ColumnDefinition { Width = "auto" },
-                            new ColumnDefinition { Width = "auto" },
-                        },
                         Children =
                         {
-                            BuildQrColumn(),
-                            BuildInstructionsColumn(),
+                            BuildInstallModeToggle(),
+                            new Grid
+                            {
+                                MarginTop = 16,
+                                ColumnDefinitions =
+                                {
+                                    new ColumnDefinition { Width = "auto" },
+                                    new ColumnDefinition { Width = "auto" },
+                                },
+                                Bindings =
+                                {
+                                    {
+                                        nameof(Visibility),
+                                        nameof(MainViewModel.IsShowingLinkMode),
+                                        null,
+                                        BindingMode.OneWay,
+                                        BoolToVisibility,
+                                        null
+                                    },
+                                },
+                                Children =
+                                {
+                                    BuildQrColumn(),
+                                    BuildInstructionsColumn(),
+                                },
+                            },
+                            BuildRegisterPanel(),
                         },
+                    },
+                },
+            },
+        };
+    }
+
+    private UIElement BuildInstallModeToggle()
+    {
+        return new Panel
+        {
+            Height = 32,
+            Children =
+            {
+                new Button
+                {
+                    Content = "关联设备",
+                    Width = 110,
+                    Height = 30,
+                    Commands =
+                    {
+                        {
+                            nameof(Button.Click),
+                            (s, e) => _ = _viewModel.SwitchToLinkModeCommand.ExecuteAsync(null)
+                        },
+                    },
+                },
+                new Button
+                {
+                    Content = "注册账户",
+                    Width = 110,
+                    Height = 30,
+                    MarginLeft = 118,
+                    Commands =
+                    {
+                        {
+                            nameof(Button.Click),
+                            (s, e) => _ = _viewModel.SwitchToRegisterModeCommand.ExecuteAsync(null)
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    private UIElement BuildRegisterPanel()
+    {
+        return new StackPanel
+        {
+            MaxWidth = 520,
+            Bindings =
+            {
+                {
+                    nameof(Visibility),
+                    nameof(MainViewModel.IsShowingRegisterMode),
+                    null,
+                    BindingMode.OneWay,
+                    BoolToVisibility,
+                    null
+                },
+            },
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "用手机号注册主设备账户",
+                    FontSize = 22,
+                    FontStyle = FontStyles.Bold,
+                    Foreground = "#000000",
+                },
+                new TextBlock
+                {
+                    Text = "1. 输入 E.164 手机号  2. 如需则粘贴 Captcha  3. 输入验证码完成注册",
+                    FontSize = 13,
+                    Foreground = "#4B5563",
+                    MarginTop = 8,
+                },
+                new TextBlock
+                {
+                    Text = "手机号（E.164）",
+                    FontSize = 12,
+                    Foreground = "#6B7280",
+                    MarginTop = 14,
+                },
+                new TextBox
+                {
+                    Width = 320,
+                    Height = 30,
+                    MarginTop = 4,
+                    Bindings =
+                    {
+                        {
+                            nameof(TextBox.Text),
+                            nameof(MainViewModel.RegisterPhoneNumber),
+                            null,
+                            BindingMode.TwoWay
+                        },
+                        {
+                            nameof(TextBox.IsEnabled),
+                            nameof(MainViewModel.IsRegisterBusy),
+                            null,
+                            BindingMode.OneWay,
+                            a => !(bool)a!,
+                            null
+                        },
+                    },
+                },
+                new TextBlock
+                {
+                    Text = "设备名",
+                    FontSize = 12,
+                    Foreground = "#6B7280",
+                    MarginTop = 10,
+                },
+                new TextBox
+                {
+                    Width = 320,
+                    Height = 30,
+                    MarginTop = 4,
+                    Bindings =
+                    {
+                        {
+                            nameof(TextBox.Text),
+                            nameof(MainViewModel.DeviceName),
+                            null,
+                            BindingMode.TwoWay
+                        },
+                    },
+                },
+                new TextBlock
+                {
+                    Text = "Captcha token（可选；浏览器完成挑战后粘贴 signalcaptcha:// 后的值）",
+                    FontSize = 12,
+                    Foreground = "#6B7280",
+                    MarginTop = 10,
+                },
+                new TextBlock
+                {
+                    FontSize = 11,
+                    Foreground = "#2563EB",
+                    MarginTop = 2,
+                    Bindings =
+                    {
+                        {
+                            nameof(TextBlock.Text),
+                            nameof(MainViewModel.RegisterChallengeUrl),
+                            null,
+                            BindingMode.OneWay,
+                            a => string.IsNullOrWhiteSpace(a as string)
+                                ? "Captcha 页：未配置 SIGNAL_CHALLENGE_URL"
+                                : $"Captcha 页：{a}",
+                            null
+                        },
+                    },
+                },
+                new TextBox
+                {
+                    Width = 480,
+                    Height = 30,
+                    MarginTop = 4,
+                    Bindings =
+                    {
+                        {
+                            nameof(TextBox.Text),
+                            nameof(MainViewModel.RegisterCaptchaToken),
+                            null,
+                            BindingMode.TwoWay
+                        },
+                    },
+                },
+                new Panel
+                {
+                    MarginTop = 12,
+                    Height = 32,
+                    Children =
+                    {
+                        new Button
+                        {
+                            Content = "获取验证码",
+                            Width = 110,
+                            Height = 30,
+                            Commands =
+                            {
+                                {
+                                    nameof(Button.Click),
+                                    (s, e) => _ = _viewModel.StartPhoneRegistrationCommand.ExecuteAsync(null)
+                                },
+                            },
+                            Bindings =
+                            {
+                                {
+                                    nameof(Button.IsEnabled),
+                                    nameof(MainViewModel.IsRegisterBusy),
+                                    null,
+                                    BindingMode.OneWay,
+                                    a => !(bool)a!,
+                                    null
+                                },
+                            },
+                        },
+                        new Button
+                        {
+                            Content = "提交 Captcha",
+                            Width = 110,
+                            Height = 30,
+                            MarginLeft = 118,
+                            Commands =
+                            {
+                                {
+                                    nameof(Button.Click),
+                                    (s, e) => _ = _viewModel.SubmitRegistrationCaptchaCommand.ExecuteAsync(null)
+                                },
+                            },
+                            Bindings =
+                            {
+                                {
+                                    nameof(Button.IsEnabled),
+                                    nameof(MainViewModel.IsRegisterBusy),
+                                    null,
+                                    BindingMode.OneWay,
+                                    a => !(bool)a!,
+                                    null
+                                },
+                            },
+                        },
+                        new Button
+                        {
+                            Content = "重发验证码",
+                            Width = 110,
+                            Height = 30,
+                            MarginLeft = 236,
+                            Commands =
+                            {
+                                {
+                                    nameof(Button.Click),
+                                    (s, e) => _ = _viewModel.RequestRegistrationCodeCommand.ExecuteAsync(null)
+                                },
+                            },
+                            Bindings =
+                            {
+                                {
+                                    nameof(Button.IsEnabled),
+                                    nameof(MainViewModel.IsRegisterBusy),
+                                    null,
+                                    BindingMode.OneWay,
+                                    a => !(bool)a!,
+                                    null
+                                },
+                            },
+                        },
+                    },
+                },
+                new TextBlock
+                {
+                    Text = "验证码",
+                    FontSize = 12,
+                    Foreground = "#6B7280",
+                    MarginTop = 14,
+                },
+                new Panel
+                {
+                    MarginTop = 4,
+                    Height = 32,
+                    Children =
+                    {
+                        new TextBox
+                        {
+                            Width = 180,
+                            Height = 30,
+                            Bindings =
+                            {
+                                {
+                                    nameof(TextBox.Text),
+                                    nameof(MainViewModel.RegisterVerificationCode),
+                                    null,
+                                    BindingMode.TwoWay
+                                },
+                            },
+                        },
+                        new Button
+                        {
+                            Content = "完成注册",
+                            Width = 110,
+                            Height = 30,
+                            MarginLeft = 188,
+                            Commands =
+                            {
+                                {
+                                    nameof(Button.Click),
+                                    (s, e) => _ = _viewModel.CompletePhoneRegistrationCommand.ExecuteAsync(null)
+                                },
+                            },
+                            Bindings =
+                            {
+                                {
+                                    nameof(Button.IsEnabled),
+                                    nameof(MainViewModel.IsRegisterBusy),
+                                    null,
+                                    BindingMode.OneWay,
+                                    a => !(bool)a!,
+                                    null
+                                },
+                            },
+                        },
+                    },
+                },
+                new TextBlock
+                {
+                    FontSize = 12,
+                    Foreground = "#6B7280",
+                    MarginTop = 12,
+                    Bindings =
+                    {
+                        { nameof(TextBlock.Text), nameof(MainViewModel.StatusText) },
                     },
                 },
             },

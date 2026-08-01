@@ -66,7 +66,7 @@ public sealed class SignalServerOptions
                 Cdn2Url = "https://cdn2.signal.org";
                 Cdn3Url = "https://cdn3.signal.org";
                 StorageUrl = "https://storage.signal.org";
-                ChallengeUrl = "https://signalcaptchas.org/challenge/generate.html";
+                ChallengeUrl = "https://signalcaptchas.org/registration/generate.html";
                 // Production RemoteDeprecationFilter returns HTTP 499 for outdated Desktop UAs.
                 if (UserAgent.StartsWith("SignalCpf/", StringComparison.Ordinal))
                     UserAgent = "Signal-Desktop/8.20.0";
@@ -79,7 +79,7 @@ public sealed class SignalServerOptions
                 Cdn2Url = "https://cdn2-staging.signal.org";
                 Cdn3Url = "https://cdn3-staging.signal.org";
                 StorageUrl = "https://storage-staging.signal.org";
-                ChallengeUrl = "https://signalcaptchas.org/staging/challenge/generate.html";
+                ChallengeUrl = "https://signalcaptchas.org/staging/registration/generate.html";
                 if (UserAgent.StartsWith("SignalCpf/", StringComparison.Ordinal))
                     UserAgent = "Signal-Desktop/8.20.0";
                 AllowInsecureTls = false;

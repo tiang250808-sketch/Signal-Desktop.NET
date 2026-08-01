@@ -21,6 +21,14 @@ public static class SignalAuth
         return new AuthenticationHeaderValue("Basic", token);
     }
 
+    /// <summary>Basic auth for primary registration: {e164}:{password}</summary>
+    public static AuthenticationHeaderValue NumberBasic(string e164, string password)
+    {
+        var token = Convert.ToBase64String(
+            Encoding.UTF8.GetBytes($"{e164.Trim()}:{password}"));
+        return new AuthenticationHeaderValue("Basic", token);
+    }
+
     public static string NormalizeAci(string aci) =>
         Guid.TryParse(aci, out var g)
             ? g.ToString().ToLowerInvariant()
