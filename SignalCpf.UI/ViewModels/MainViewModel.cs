@@ -47,31 +47,78 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsShowingLinkMode))]
     [NotifyPropertyChangedFor(nameof(IsShowingRegisterMode))]
     [NotifyPropertyChangedFor(nameof(IsShowingQrCard))]
+    [NotifyPropertyChangedFor(nameof(IsShowingRegisterPhoneStep))]
+    [NotifyPropertyChangedFor(nameof(IsShowingRegisterCaptchaStep))]
+    [NotifyPropertyChangedFor(nameof(IsShowingRegisterVerifyStep))]
     private bool _isRegisterMode;
 
     [ObservableProperty]
-    private string _registerPhoneNumber = string.Empty;
+    [NotifyPropertyChangedFor(nameof(CanSendRegistrationCode))]
+    [NotifyPropertyChangedFor(nameof(RegisterPhoneNumber))]
+    [NotifyPropertyChangedFor(nameof(SelectedCountryLabel))]
+    private string _registerCountryCode = CountryDialCodes.Default.DialCode;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSendRegistrationCode))]
+    [NotifyPropertyChangedFor(nameof(RegisterPhoneNumber))]
+    private string _registerNationalNumber = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedCountryLabel))]
+    private CountryDialOption? _selectedCountry = CountryDialCodes.Default;
+
+    [ObservableProperty]
+    private bool _isCountryPickerOpen;
+
+    public ObservableCollection<CountryDialOption> Countries { get; } = new(CountryDialCodes.All);
+
+    public string SelectedCountryLabel =>
+        SelectedCountry?.DialCode
+        ?? (string.IsNullOrWhiteSpace(RegisterCountryCode) ? "+1" : RegisterCountryCode);
 
     [ObservableProperty]
     private string _registerCaptchaToken = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanCompleteRegistration))]
     private string _registerVerificationCode = string.Empty;
 
     [ObservableProperty]
     private bool _registerUseVoice;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsShowingRegisterCaptchaStep))]
+    [NotifyPropertyChangedFor(nameof(IsShowingRegisterVerifyStep))]
     private bool _registerCaptchaRequired;
 
     [ObservableProperty]
     private string? _registerChallengeUrl;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSendRegistrationCode))]
+    [NotifyPropertyChangedFor(nameof(CanCompleteRegistration))]
     private bool _isRegisterBusy;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsShowingRegisterVerifyStep))]
+    [NotifyPropertyChangedFor(nameof(IsShowingRegisterPhoneStep))]
     private bool _registerCodeSent;
+
+    public string RegisterPhoneNumber => ComposeE164(RegisterCountryCode, RegisterNationalNumber);
+
+    public bool CanSendRegistrationCode =>
+        !IsRegisterBusy && LooksLikeValidPhone(RegisterCountryCode, RegisterNationalNumber);
+
+    public bool CanCompleteRegistration =>
+        !IsRegisterBusy && RegisterVerificationCode.Trim().Length >= 6;
+
+    public bool IsShowingRegisterPhoneStep => IsShowingRegisterMode && !RegisterCodeSent;
+
+    public bool IsShowingRegisterCaptchaStep =>
+        IsShowingRegisterMode && RegisterCaptchaRequired;
+
+    public bool IsShowingRegisterVerifyStep =>
+        IsShowingRegisterMode && (RegisterCodeSent || RegisterCaptchaRequired);
 
     [ObservableProperty]
     private ConversationItemViewModel? _selectedConversation;
@@ -115,6 +162,51 @@ public partial class MainViewModel : ObservableObject
     public MainViewModel(ISignalSidecarClient client)
     {
         _client = client;
+        SelectedCountry = CountryDialCodes.Default;
+        RegisterCountryCode = CountryDialCodes.Default.DialCode;
+    }
+
+    partial void OnSelectedCountryChanged(CountryDialOption? value)
+    {
+        if (value is null)
+            return;
+        if (!string.Equals(RegisterCountryCode, value.DialCode, StringComparison.Ordinal))
+            RegisterCountryCode = value.DialCode;
+        IsCountryPickerOpen = false;
+    }
+
+    partial void OnRegisterCountryCodeChanged(string value)
+    {
+        var normalized = NormalizeDialCode(value);
+        if (SelectedCountry is not null
+            && string.Equals(SelectedCountry.DialCode, normalized, StringComparison.Ordinal))
+            return;
+
+        var match = CountryDialCodes.FindByDialCode(normalized);
+        if (match is not null)
+            SelectedCountry = match;
+    }
+
+    private static string NormalizeDialCode(string? raw)
+    {
+        var code = (raw ?? "").Trim().Replace(" ", "", StringComparison.Ordinal);
+        if (string.IsNullOrEmpty(code))
+            return "+1";
+        return code.StartsWith('+') ? code : "+" + code.TrimStart('+');
+    }
+
+    [RelayCommand]
+    private void ToggleCountryPicker()
+    {
+        if (IsRegisterBusy)
+            return;
+        IsCountryPickerOpen = !IsCountryPickerOpen;
+    }
+
+    [RelayCommand]
+    private void CloseCountryPicker()
+    {
+        IsCountryPickerOpen = false;
     }
 
     public async Task InitializeAsync()
@@ -207,7 +299,9 @@ public partial class MainViewModel : ObservableObject
         IsLinkInProgress = false;
         IsQrLoading = false;
         IsRegisterMode = true;
-        StatusText = "注册账户：输入 E.164 手机号获取验证码";
+        RegisterCodeSent = false;
+        RegisterCaptchaRequired = false;
+        StatusText = string.Empty;
         await RefreshSettingsAsync();
     }
 
@@ -245,26 +339,38 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private Task SendSmsRegistrationAsync()
+    {
+        RegisterUseVoice = false;
+        return StartPhoneRegistrationAsync();
+    }
+
+    [RelayCommand]
+    private Task CallRegistrationAsync()
+    {
+        RegisterUseVoice = true;
+        return StartPhoneRegistrationAsync();
+    }
+
+    [RelayCommand]
     private async Task StartPhoneRegistrationAsync()
     {
-        if (string.IsNullOrWhiteSpace(RegisterPhoneNumber))
+        var e164 = RegisterPhoneNumber;
+        if (!LooksLikeValidPhone(RegisterCountryCode, RegisterNationalNumber))
         {
-            StatusText = "请输入 E.164 手机号（如 +8613812345678）";
+            StatusText = "请输入有效手机号";
             return;
         }
 
         try
         {
             IsRegisterBusy = true;
-            StatusText = "正在创建验证会话…";
+            StatusText = RegisterUseVoice ? "正在请求语音验证码…" : "正在发送短信验证码…";
             var transport = RegisterUseVoice ? "voice" : "sms";
             var captcha = string.IsNullOrWhiteSpace(RegisterCaptchaToken)
                 ? null
                 : RegisterCaptchaToken.Trim();
-            var status = await _client.StartPhoneRegistrationAsync(
-                RegisterPhoneNumber.Trim(),
-                captcha,
-                transport);
+            var status = await _client.StartPhoneRegistrationAsync(e164, captcha, transport);
             ApplyRegistrationStatus(status);
         }
         catch (Exception ex)
@@ -275,6 +381,23 @@ public partial class MainViewModel : ObservableObject
         {
             IsRegisterBusy = false;
         }
+    }
+
+    private static string ComposeE164(string countryCode, string national)
+    {
+        var cc = (countryCode ?? "").Trim().Replace(" ", "", StringComparison.Ordinal);
+        if (!cc.StartsWith('+'))
+            cc = "+" + cc.TrimStart('+');
+        var digits = new string((national ?? "").Where(char.IsDigit).ToArray());
+        return string.IsNullOrEmpty(digits) ? cc : cc + digits;
+    }
+
+    private static bool LooksLikeValidPhone(string countryCode, string national)
+    {
+        var e164 = ComposeE164(countryCode, national);
+        return e164.Length is >= 10 and <= 16
+               && e164.StartsWith('+')
+               && e164[1..].All(char.IsDigit);
     }
 
     [RelayCommand]

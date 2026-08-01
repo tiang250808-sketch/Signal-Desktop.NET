@@ -1,6 +1,7 @@
 using CPF;
 using CPF.Controls;
 using CPF.Drawing;
+using CPF.Shapes;
 using SignalCpf.UI.Controls;
 using SignalCpf.UI.ViewModels;
 
@@ -58,6 +59,10 @@ public class MainWindow : Window
         };
     }
 
+    private const string SignalBlue = "#3A76F0";
+    private const string SignalBlueMuted = "#A8C4F5";
+    private const string SendSmsDisabledBg = "#C5C8CE";
+
     private UIElement BuildInstallScreen()
     {
         return new Panel
@@ -77,14 +82,37 @@ public class MainWindow : Window
             },
             Children =
             {
+                BuildLinkInstallPanel(),
+                BuildRegisterPanel(),
+            },
+        };
+    }
+
+    private UIElement BuildLinkInstallPanel()
+    {
+        return new Panel
+        {
+            Width = "100%",
+            Height = "100%",
+            Bindings =
+            {
+                {
+                    nameof(Visibility),
+                    nameof(MainViewModel.IsShowingLinkMode),
+                    null,
+                    BindingMode.OneWay,
+                    BoolToVisibility,
+                    null
+                },
+            },
+            Children =
+            {
                 new SignalLogo
                 {
                     MarginLeft = 32,
                     MarginTop = 36,
                     ZIndex = 1,
                 },
-                // CPF Panel: unset margins default to Auto → content-sized & centered.
-                // Do not set Margin="48" (all sides) or the card stretches full window.
                 new Border
                 {
                     MaxWidth = 760,
@@ -106,24 +134,12 @@ public class MainWindow : Window
                                     new ColumnDefinition { Width = "auto" },
                                     new ColumnDefinition { Width = "auto" },
                                 },
-                                Bindings =
-                                {
-                                    {
-                                        nameof(Visibility),
-                                        nameof(MainViewModel.IsShowingLinkMode),
-                                        null,
-                                        BindingMode.OneWay,
-                                        BoolToVisibility,
-                                        null
-                                    },
-                                },
                                 Children =
                                 {
                                     BuildQrColumn(),
                                     BuildInstructionsColumn(),
                                 },
                             },
-                            BuildRegisterPanel(),
                         },
                     },
                 },
@@ -171,9 +187,12 @@ public class MainWindow : Window
 
     private UIElement BuildRegisterPanel()
     {
-        return new StackPanel
+        // Full-bleed, centered layout matching Signal Desktop "Create your Signal Account".
+        return new Panel
         {
-            MaxWidth = 520,
+            Width = "100%",
+            Height = "100%",
+            Background = "#F6F6F6",
             Bindings =
             {
                 {
@@ -187,149 +206,423 @@ public class MainWindow : Window
             },
             Children =
             {
-                new TextBlock
+                new StackPanel
                 {
-                    Text = "用手机号注册主设备账户",
-                    FontSize = 22,
-                    FontStyle = FontStyles.Bold,
-                    Foreground = "#000000",
-                },
-                new TextBlock
-                {
-                    Text = "1. 输入 E.164 手机号  2. 如需则粘贴 Captcha  3. 输入验证码完成注册",
-                    FontSize = 13,
-                    Foreground = "#4B5563",
-                    MarginTop = 8,
-                },
-                new TextBlock
-                {
-                    Text = "手机号（E.164）",
-                    FontSize = 12,
-                    Foreground = "#6B7280",
-                    MarginTop = 14,
-                },
-                new TextBox
-                {
-                    Width = 320,
-                    Height = 30,
-                    MarginTop = 4,
-                    Bindings =
-                    {
-                        {
-                            nameof(TextBox.Text),
-                            nameof(MainViewModel.RegisterPhoneNumber),
-                            null,
-                            BindingMode.TwoWay
-                        },
-                        {
-                            nameof(TextBox.IsEnabled),
-                            nameof(MainViewModel.IsRegisterBusy),
-                            null,
-                            BindingMode.OneWay,
-                            a => !(bool)a!,
-                            null
-                        },
-                    },
-                },
-                new TextBlock
-                {
-                    Text = "设备名",
-                    FontSize = 12,
-                    Foreground = "#6B7280",
-                    MarginTop = 10,
-                },
-                new TextBox
-                {
-                    Width = 320,
-                    Height = 30,
-                    MarginTop = 4,
-                    Bindings =
-                    {
-                        {
-                            nameof(TextBox.Text),
-                            nameof(MainViewModel.DeviceName),
-                            null,
-                            BindingMode.TwoWay
-                        },
-                    },
-                },
-                new TextBlock
-                {
-                    Text = "Captcha token（可选；浏览器完成挑战后粘贴 signalcaptcha:// 后的值）",
-                    FontSize = 12,
-                    Foreground = "#6B7280",
-                    MarginTop = 10,
-                },
-                new TextBlock
-                {
-                    FontSize = 11,
-                    Foreground = "#2563EB",
-                    MarginTop = 2,
-                    Bindings =
-                    {
-                        {
-                            nameof(TextBlock.Text),
-                            nameof(MainViewModel.RegisterChallengeUrl),
-                            null,
-                            BindingMode.OneWay,
-                            a => string.IsNullOrWhiteSpace(a as string)
-                                ? "Captcha 页：未配置 SIGNAL_CHALLENGE_URL"
-                                : $"Captcha 页：{a}",
-                            null
-                        },
-                    },
-                },
-                new TextBox
-                {
-                    Width = 480,
-                    Height = 30,
-                    MarginTop = 4,
-                    Bindings =
-                    {
-                        {
-                            nameof(TextBox.Text),
-                            nameof(MainViewModel.RegisterCaptchaToken),
-                            null,
-                            BindingMode.TwoWay
-                        },
-                    },
-                },
-                new Panel
-                {
-                    MarginTop = 12,
-                    Height = 32,
+                    Width = 360,
                     Children =
                     {
+                        new SignalHeroLogo
+                        {
+                            MarginTop = 64,
+                            MarginLeft = 120,
+                        },
+                        new TextBlock
+                        {
+                            Text = "Create your Signal Account",
+                            Width = 360,
+                            FontSize = 22,
+                            FontStyle = FontStyles.Bold,
+                            Foreground = "#1B1B1B",
+                            MarginTop = 28,
+                            TextAlignment = TextAlignment.Center,
+                        },
+                        BuildPhoneNumberField(),
+                        BuildSendSmsButton(),
                         new Button
                         {
-                            Content = "获取验证码",
-                            Width = 110,
-                            Height = 30,
+                            Content = "Call",
+                            Width = 60,
+                            Height = 28,
+                            MarginTop = 10,
+                            MarginLeft = 150,
+                            Background = null,
+                            BorderFill = null,
+                            Foreground = SignalBlueMuted,
                             Commands =
                             {
                                 {
                                     nameof(Button.Click),
-                                    (s, e) => _ = _viewModel.StartPhoneRegistrationCommand.ExecuteAsync(null)
+                                    (s, e) => _ = _viewModel.CallRegistrationCommand.ExecuteAsync(null)
                                 },
                             },
                             Bindings =
                             {
                                 {
                                     nameof(Button.IsEnabled),
-                                    nameof(MainViewModel.IsRegisterBusy),
+                                    nameof(MainViewModel.CanSendRegistrationCode),
+                                    null,
+                                    BindingMode.OneWay
+                                },
+                            },
+                        },
+                        BuildRegisterFollowUpSteps(),
+                        new TextBlock
+                        {
+                            Width = 360,
+                            FontSize = 12,
+                            Foreground = "#6B7280",
+                            MarginTop = 16,
+                            TextAlignment = TextAlignment.Center,
+                            Bindings =
+                            {
+                                { nameof(TextBlock.Text), nameof(MainViewModel.StatusText) },
+                            },
+                        },
+                        new Button
+                        {
+                            Content = "Link an existing device",
+                            Width = 200,
+                            Height = 28,
+                            MarginTop = 8,
+                            MarginLeft = 80,
+                            Background = null,
+                            BorderFill = null,
+                            Foreground = SignalBlue,
+                            Commands =
+                            {
+                                {
+                                    nameof(Button.Click),
+                                    (s, e) => _ = _viewModel.SwitchToLinkModeCommand.ExecuteAsync(null)
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    private UIElement BuildPhoneNumberField()
+    {
+        return new StackPanel
+        {
+            Width = 320,
+            MarginTop = 28,
+            MarginLeft = 20,
+            Children =
+            {
+                new Border
+                {
+                    Width = 320,
+                    Height = 44,
+                    Background = "#FFFFFF",
+                    BorderFill = SignalBlue,
+                    BorderStroke = "1.5",
+                    CornerRadius = "4",
+                    Child = new Panel
+                    {
+                        Width = 320,
+                        Height = 44,
+                        Children =
+                        {
+                            // Clickable country selector (globe + dial code + chevron)
+                            new Button
+                            {
+                                Width = 96,
+                                Height = 40,
+                                MarginLeft = 2,
+                                MarginTop = 2,
+                                Background = null,
+                                BorderFill = null,
+                                Commands =
+                                {
+                                    {
+                                        nameof(Button.Click),
+                                        (s, e) => _viewModel.ToggleCountryPickerCommand.Execute(null)
+                                    },
+                                },
+                                Bindings =
+                                {
+                                    {
+                                        nameof(Button.IsEnabled),
+                                        nameof(MainViewModel.IsRegisterBusy),
+                                        null,
+                                        BindingMode.OneWay,
+                                        a => !(bool)a!,
+                                        null
+                                    },
+                                },
+                                Content = new Panel
+                                {
+                                    Width = 96,
+                                    Height = 40,
+                                    Children =
+                                    {
+                                        new Ellipse
+                                        {
+                                            Width = 16,
+                                            Height = 16,
+                                            MarginLeft = 10,
+                                            MarginTop = 12,
+                                            Fill = null,
+                                            StrokeFill = "#6B7280",
+                                            IsAntiAlias = true,
+                                        },
+                                        new Ellipse
+                                        {
+                                            Width = 6,
+                                            Height = 6,
+                                            MarginLeft = 15,
+                                            MarginTop = 17,
+                                            Fill = "#6B7280",
+                                            StrokeFill = null,
+                                            IsAntiAlias = true,
+                                        },
+                                        new TextBlock
+                                        {
+                                            FontSize = 14,
+                                            Foreground = "#1B1B1B",
+                                            MarginLeft = 32,
+                                            MarginTop = 10,
+                                            Bindings =
+                                            {
+                                                {
+                                                    nameof(TextBlock.Text),
+                                                    nameof(MainViewModel.SelectedCountryLabel)
+                                                },
+                                            },
+                                        },
+                                        new TextBlock
+                                        {
+                                            Text = "▾",
+                                            FontSize = 10,
+                                            Foreground = "#6B7280",
+                                            MarginLeft = 78,
+                                            MarginTop = 11,
+                                        },
+                                    },
+                                },
+                            },
+                            new Border
+                            {
+                                Width = 1,
+                                Height = 22,
+                                MarginLeft = 100,
+                                MarginTop = 11,
+                                Background = "#D1D5DB",
+                            },
+                            new TextBox
+                            {
+                                Width = 200,
+                                Height = 28,
+                                MarginLeft = 110,
+                                MarginTop = 8,
+                                Background = null,
+                                BorderFill = null,
+                                Bindings =
+                                {
+                                    {
+                                        nameof(TextBox.Text),
+                                        nameof(MainViewModel.RegisterNationalNumber),
+                                        null,
+                                        BindingMode.TwoWay
+                                    },
+                                    {
+                                        nameof(TextBox.IsEnabled),
+                                        nameof(MainViewModel.IsRegisterBusy),
+                                        null,
+                                        BindingMode.OneWay,
+                                        a => !(bool)a!,
+                                        null
+                                    },
+                                },
+                            },
+                            new TextBlock
+                            {
+                                Text = "Phone Number",
+                                FontSize = 14,
+                                Foreground = "#9CA3AF",
+                                MarginLeft = 114,
+                                MarginTop = 12,
+                                Bindings =
+                                {
+                                    {
+                                        nameof(Visibility),
+                                        nameof(MainViewModel.RegisterNationalNumber),
+                                        null,
+                                        BindingMode.OneWay,
+                                        a => string.IsNullOrEmpty(a as string)
+                                            ? Visibility.Visible
+                                            : Visibility.Collapsed,
+                                        null
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                // Country dropdown
+                new Border
+                {
+                    Width = 320,
+                    Height = 220,
+                    MarginTop = 4,
+                    Background = "#FFFFFF",
+                    BorderFill = "#D1D5DB",
+                    BorderStroke = "1",
+                    CornerRadius = "4",
+                    ZIndex = 20,
+                    Bindings =
+                    {
+                        {
+                            nameof(Visibility),
+                            nameof(MainViewModel.IsCountryPickerOpen),
+                            null,
+                            BindingMode.OneWay,
+                            BoolToVisibility,
+                            null
+                        },
+                    },
+                    Child = new ListBox
+                    {
+                        Width = "100%",
+                        Height = "100%",
+                        Background = "#FFFFFF",
+                        ItemTemplate = typeof(CountryDialListItem),
+                        Bindings =
+                        {
+                            { nameof(ListBox.Items), nameof(MainViewModel.Countries) },
+                            {
+                                nameof(ListBox.SelectedValue),
+                                nameof(MainViewModel.SelectedCountry),
+                                null,
+                                BindingMode.TwoWay
+                            },
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    private UIElement BuildSendSmsButton()
+    {
+        return new Button
+        {
+            Content = "Send SMS",
+            Width = 320,
+            Height = 44,
+            MarginTop = 18,
+            MarginLeft = 20,
+            CornerRadius = "4",
+            Foreground = "#FFFFFF",
+            BorderFill = null,
+            Commands =
+            {
+                {
+                    nameof(Button.Click),
+                    (s, e) => _ = _viewModel.SendSmsRegistrationCommand.ExecuteAsync(null)
+                },
+            },
+            Bindings =
+            {
+                {
+                    nameof(Button.IsEnabled),
+                    nameof(MainViewModel.CanSendRegistrationCode),
+                    null,
+                    BindingMode.OneWay
+                },
+                {
+                    nameof(Button.Background),
+                    nameof(MainViewModel.CanSendRegistrationCode),
+                    null,
+                    BindingMode.OneWay,
+                    a => (bool)a! ? SignalBlue : SendSmsDisabledBg,
+                    null
+                },
+            },
+        };
+    }
+
+    private UIElement BuildRegisterFollowUpSteps()
+    {
+        return new StackPanel
+        {
+            Width = 320,
+            MarginTop = 20,
+            MarginLeft = 20,
+            Bindings =
+            {
+                {
+                    nameof(Visibility),
+                    nameof(MainViewModel.IsShowingRegisterVerifyStep),
+                    null,
+                    BindingMode.OneWay,
+                    BoolToVisibility,
+                    null
+                },
+            },
+            Children =
+            {
+                new StackPanel
+                {
+                    Bindings =
+                    {
+                        {
+                            nameof(Visibility),
+                            nameof(MainViewModel.IsShowingRegisterCaptchaStep),
+                            null,
+                            BindingMode.OneWay,
+                            BoolToVisibility,
+                            null
+                        },
+                    },
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = "Captcha required",
+                            Width = 320,
+                            FontSize = 13,
+                            Foreground = "#374151",
+                            TextAlignment = TextAlignment.Center,
+                        },
+                        new TextBlock
+                        {
+                            Width = 320,
+                            FontSize = 11,
+                            Foreground = SignalBlue,
+                            MarginTop = 4,
+                            TextAlignment = TextAlignment.Center,
+                            Bindings =
+                            {
+                                {
+                                    nameof(TextBlock.Text),
+                                    nameof(MainViewModel.RegisterChallengeUrl),
                                     null,
                                     BindingMode.OneWay,
-                                    a => !(bool)a!,
+                                    a => string.IsNullOrWhiteSpace(a as string)
+                                        ? "Open captcha page, then paste token below"
+                                        : (string)a!,
                                     null
+                                },
+                            },
+                        },
+                        new TextBox
+                        {
+                            Width = 320,
+                            Height = 36,
+                            MarginTop = 8,
+                            Bindings =
+                            {
+                                {
+                                    nameof(TextBox.Text),
+                                    nameof(MainViewModel.RegisterCaptchaToken),
+                                    null,
+                                    BindingMode.TwoWay
                                 },
                             },
                         },
                         new Button
                         {
-                            Content = "提交 Captcha",
-                            Width = 110,
-                            Height = 30,
-                            MarginLeft = 118,
+                            Content = "Submit Captcha",
+                            Width = 320,
+                            Height = 40,
+                            MarginTop = 8,
+                            Background = SignalBlue,
+                            Foreground = "#FFFFFF",
+                            BorderFill = null,
+                            CornerRadius = "4",
                             Commands =
                             {
                                 {
@@ -349,95 +642,64 @@ public class MainWindow : Window
                                 },
                             },
                         },
-                        new Button
-                        {
-                            Content = "重发验证码",
-                            Width = 110,
-                            Height = 30,
-                            MarginLeft = 236,
-                            Commands =
-                            {
-                                {
-                                    nameof(Button.Click),
-                                    (s, e) => _ = _viewModel.RequestRegistrationCodeCommand.ExecuteAsync(null)
-                                },
-                            },
-                            Bindings =
-                            {
-                                {
-                                    nameof(Button.IsEnabled),
-                                    nameof(MainViewModel.IsRegisterBusy),
-                                    null,
-                                    BindingMode.OneWay,
-                                    a => !(bool)a!,
-                                    null
-                                },
-                            },
-                        },
                     },
                 },
                 new TextBlock
                 {
-                    Text = "验证码",
-                    FontSize = 12,
-                    Foreground = "#6B7280",
-                    MarginTop = 14,
+                    Text = "Verification code",
+                    Width = 320,
+                    FontSize = 13,
+                    Foreground = "#374151",
+                    MarginTop = 16,
+                    TextAlignment = TextAlignment.Center,
                 },
-                new Panel
+                new TextBox
                 {
-                    MarginTop = 4,
-                    Height = 32,
-                    Children =
-                    {
-                        new TextBox
-                        {
-                            Width = 180,
-                            Height = 30,
-                            Bindings =
-                            {
-                                {
-                                    nameof(TextBox.Text),
-                                    nameof(MainViewModel.RegisterVerificationCode),
-                                    null,
-                                    BindingMode.TwoWay
-                                },
-                            },
-                        },
-                        new Button
-                        {
-                            Content = "完成注册",
-                            Width = 110,
-                            Height = 30,
-                            MarginLeft = 188,
-                            Commands =
-                            {
-                                {
-                                    nameof(Button.Click),
-                                    (s, e) => _ = _viewModel.CompletePhoneRegistrationCommand.ExecuteAsync(null)
-                                },
-                            },
-                            Bindings =
-                            {
-                                {
-                                    nameof(Button.IsEnabled),
-                                    nameof(MainViewModel.IsRegisterBusy),
-                                    null,
-                                    BindingMode.OneWay,
-                                    a => !(bool)a!,
-                                    null
-                                },
-                            },
-                        },
-                    },
-                },
-                new TextBlock
-                {
-                    FontSize = 12,
-                    Foreground = "#6B7280",
-                    MarginTop = 12,
+                    Width = 320,
+                    Height = 40,
+                    MarginTop = 8,
                     Bindings =
                     {
-                        { nameof(TextBlock.Text), nameof(MainViewModel.StatusText) },
+                        {
+                            nameof(TextBox.Text),
+                            nameof(MainViewModel.RegisterVerificationCode),
+                            null,
+                            BindingMode.TwoWay
+                        },
+                    },
+                },
+                new Button
+                {
+                    Content = "Continue",
+                    Width = 320,
+                    Height = 44,
+                    MarginTop = 12,
+                    CornerRadius = "4",
+                    Foreground = "#FFFFFF",
+                    BorderFill = null,
+                    Commands =
+                    {
+                        {
+                            nameof(Button.Click),
+                            (s, e) => _ = _viewModel.CompletePhoneRegistrationCommand.ExecuteAsync(null)
+                        },
+                    },
+                    Bindings =
+                    {
+                        {
+                            nameof(Button.IsEnabled),
+                            nameof(MainViewModel.CanCompleteRegistration),
+                            null,
+                            BindingMode.OneWay
+                        },
+                        {
+                            nameof(Button.Background),
+                            nameof(MainViewModel.CanCompleteRegistration),
+                            null,
+                            BindingMode.OneWay,
+                            a => (bool)a! ? SignalBlue : SendSmsDisabledBg,
+                            null
+                        },
                     },
                 },
             },
