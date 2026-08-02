@@ -13,8 +13,7 @@ public static class QrCodeBitmapFactory
         if (string.IsNullOrWhiteSpace(url))
             return null;
 
-        // High ECC so a center logo cutout remains scannable.
-        var qr = QrCode.EncodeText(url, QrCode.Ecc.High);
+        var qr = QrCode.EncodeText(url, QrCode.Ecc.Medium);
         var bmpBytes = qr.ToBmpBitmap(scale, border);
         return Image.FromBuffer(bmpBytes);
     }

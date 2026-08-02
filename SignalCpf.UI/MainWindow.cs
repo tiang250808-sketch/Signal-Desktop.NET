@@ -767,31 +767,6 @@ public class MainWindow : Window
                                     { nameof(Picture.Source), nameof(MainViewModel.QrCodeImage) },
                                 },
                             },
-                            new Border
-                            {
-                                Width = 72,
-                                Height = 72,
-                                CornerRadius = "36",
-                                Background = "#FFFFFF",
-                                MarginLeft = 92,
-                                MarginTop = 92,
-                                Child = new SignalBubbleIcon
-                                {
-                                    MarginLeft = 12,
-                                    MarginTop = 12,
-                                },
-                                Bindings =
-                                {
-                                    {
-                                        nameof(Visibility),
-                                        nameof(MainViewModel.QrCodeImage),
-                                        null,
-                                        BindingMode.OneWay,
-                                        a => a is null ? Visibility.Collapsed : Visibility.Visible,
-                                        null
-                                    },
-                                },
-                            },
                         },
                     },
                     new StackPanel
