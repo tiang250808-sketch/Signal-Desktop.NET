@@ -23,10 +23,10 @@ public class MainWindow : Window
     protected override void InitializeComponent()
     {
         Title = "Signal";
-        Width = 960;
-        Height = 640;
-        MinWidth = 720;
-        MinHeight = 480;
+        Width = 1100;
+        Height = 720;
+        MinWidth = 900;
+        MinHeight = 560;
         Background = null;
         CanResize = true;
 
@@ -980,10 +980,12 @@ public class MainWindow : Window
 
     private UIElement BuildChatScreen()
     {
-        return new DockPanel
+        // Prefer DockPanel over Grid: CPF Grid star columns often fail to stretch children to full height.
+        return new Panel
         {
             Width = "100%",
             Height = "100%",
+            Background = "#FFFFFF",
             Bindings =
             {
                 {
@@ -997,67 +999,650 @@ public class MainWindow : Window
             },
             Children =
             {
-                new Border
+                new DockPanel
                 {
-                    [DockPanel.Dock] = Dock.Top,
                     Width = "100%",
-                    Padding = "12,0,12,0",
-                    Background = "#0F172A",
-                    Height = 48,
-                    Child = new Grid
+                    Height = "100%",
+                    Children =
                     {
-                        Width = "100%",
-                        Height = "100%",
-                        ColumnDefinitions =
-                        {
-                            new ColumnDefinition { Width = "1*" },
-                            new ColumnDefinition { Width = "auto" },
-                        },
-                        Children =
-                        {
-                            new TextBlock
-                            {
-                                Foreground = "#F8FAFC",
-                                FontSize = 13,
-                                MarginTop = 14,
-                                Bindings =
-                                {
-                                    { nameof(TextBlock.Text), nameof(MainViewModel.StatusText) },
-                                },
-                            },
-                            new StackPanel
-                            {
-                                [Grid.ColumnIndex] = 1,
-                                Orientation = Orientation.Horizontal,
-                                MarginTop = 10,
-                                Children =
-                                {
-                                    MakeHeaderButton("刷新", () => _ = _viewModel.RefreshConversationsCommand.ExecuteAsync(null)),
-                                    MakeHeaderButton("附件", () => _ = _viewModel.AttachFileCommand.ExecuteAsync(null), marginLeft: 6),
-                                    MakeHeaderButton("设置", () => _viewModel.ToggleSettingsCommand.Execute(null), marginLeft: 6),
-                                },
-                            },
-                        },
+                        BuildChatNavRail(),
+                        BuildChatListColumn(),
+                        BuildChatThreadColumn(),
                     },
                 },
                 BuildSettingsPanel(),
-                BuildChatMainPanel(),
             },
         };
     }
 
-    private static Button MakeHeaderButton(string content, Action onClick, float marginLeft = 0) =>
+    private UIElement BuildChatNavRail()
+    {
+        return new Border
+        {
+            [DockPanel.Dock] = Dock.Left,
+            Width = 68,
+            Height = "100%",
+            Background = "#F2F2F2",
+            BorderFill = "#E0E0E0",
+            BorderStroke = "0,0,1,0",
+            Child = new DockPanel
+            {
+                Width = "100%",
+                Height = "100%",
+                Children =
+                {
+                    new StackPanel
+                    {
+                        [DockPanel.Dock] = Dock.Bottom,
+                        Width = "100%",
+                        MarginBottom = 12,
+                        Children =
+                        {
+                            MakeNavButton("⚙", () => _viewModel.ToggleSettingsCommand.Execute(null)),
+                        },
+                    },
+                    new StackPanel
+                    {
+                        Width = "100%",
+                        MarginTop = 10,
+                        Children =
+                        {
+                            MakeNavButton("☰", () => _viewModel.ToggleSettingsCommand.Execute(null)),
+                            MakeNavButton("💬", () =>
+                            {
+                                _viewModel.SettingsOpen = false;
+                                _ = _viewModel.RefreshConversationsCommand.ExecuteAsync(null);
+                            }, selected: true, marginTop: 8),
+                            MakeNavButton("📞", () => _viewModel.StatusText = "通话功能尚未实现", marginTop: 8),
+                            MakeNavButton("▢", () => _viewModel.StatusText = "Stories 尚未实现", marginTop: 8),
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    private static Button MakeNavButton(string glyph, Action onClick, bool selected = false, float marginTop = 0) =>
         new()
         {
-            Content = content,
-            Width = 64,
-            Height = 28,
-            MarginLeft = marginLeft,
+            Width = 48,
+            Height = 48,
+            MarginLeft = 10,
+            MarginTop = marginTop,
+            // CPF ViewFill cannot parse null — use Transparent instead.
+            Background = selected ? "#E0E0E0" : "Transparent",
+            BorderFill = "Transparent",
+            CornerRadius = "12",
+            Content = new TextBlock
+            {
+                Text = glyph,
+                FontSize = 20,
+                Foreground = "#3B3B3B",
+                MarginLeft = selected ? 12 : 13,
+                MarginTop = 10,
+            },
             Commands =
             {
                 { nameof(Button.Click), (s, e) => onClick() },
             },
         };
+
+    private UIElement BuildChatListColumn()
+    {
+        return new Border
+        {
+            [DockPanel.Dock] = Dock.Left,
+            Width = 320,
+            Height = "100%",
+            Background = "#FFFFFF",
+            BorderFill = "#E0E0E0",
+            BorderStroke = "0,0,1,0",
+            Child = new DockPanel
+            {
+                Width = "100%",
+                Height = "100%",
+                Children =
+                {
+                    // Header: Chats + compose
+                    new Border
+                    {
+                        [DockPanel.Dock] = Dock.Top,
+                        Width = "100%",
+                        Height = 56,
+                        Child = new DockPanel
+                        {
+                            Width = "100%",
+                            Height = "100%",
+                            Children =
+                            {
+                                new StackPanel
+                                {
+                                    [DockPanel.Dock] = Dock.Right,
+                                    Orientation = Orientation.Horizontal,
+                                    MarginTop = 10,
+                                    MarginRight = 8,
+                                    Children =
+                                    {
+                                        new Button
+                                        {
+                                            Content = "✎",
+                                            Width = 36,
+                                            Height = 36,
+                                            Background = "Transparent",
+                                            BorderFill = "Transparent",
+                                            Foreground = "#3B3B3B",
+                                            Commands =
+                                            {
+                                                {
+                                                    nameof(Button.Click),
+                                                    (s, e) => _viewModel.ToggleNewChatCommand.Execute(null)
+                                                },
+                                            },
+                                        },
+                                        new Button
+                                        {
+                                            Content = "⋮",
+                                            Width = 36,
+                                            Height = 36,
+                                            Background = "Transparent",
+                                            BorderFill = "Transparent",
+                                            Foreground = "#3B3B3B",
+                                            Commands =
+                                            {
+                                                {
+                                                    nameof(Button.Click),
+                                                    (s, e) => _ = _viewModel.RefreshConversationsCommand.ExecuteAsync(null)
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                                new TextBlock
+                                {
+                                    Text = "Chats",
+                                    FontSize = 24,
+                                    FontStyle = FontStyles.Bold,
+                                    Foreground = "#1B1B1B",
+                                    MarginLeft = 16,
+                                    MarginTop = 12,
+                                },
+                            },
+                        },
+                    },
+                    // Search
+                    new Border
+                    {
+                        [DockPanel.Dock] = Dock.Top,
+                        Width = "100%",
+                        Height = 46,
+                        Padding = "12,0,12,10",
+                        Child = new Border
+                        {
+                            Width = "100%",
+                            Height = 36,
+                            Background = "#F0F0F0",
+                            CornerRadius = "18",
+                            Child = new DockPanel
+                            {
+                                Width = "100%",
+                                Height = "100%",
+                                Children =
+                                {
+                                    new TextBlock
+                                    {
+                                        [DockPanel.Dock] = Dock.Left,
+                                        Text = "🔍",
+                                        FontSize = 13,
+                                        MarginLeft = 12,
+                                        MarginTop = 8,
+                                        IsHitTestVisible = false,
+                                    },
+                                    new TextBox
+                                    {
+                                        Width = "100%",
+                                        Height = "100%",
+                                        MarginLeft = 4,
+                                        MarginRight = 12,
+                                        Background = "Transparent",
+                                        BorderFill = "Transparent",
+                                        Padding = "0,8,0,8",
+                                        FontSize = 14,
+                                        Bindings =
+                                        {
+                                            {
+                                                nameof(TextBox.Text),
+                                                nameof(MainViewModel.ConversationFilter),
+                                                null,
+                                                BindingMode.TwoWay
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    // New chat composer
+                    new Border
+                    {
+                        [DockPanel.Dock] = Dock.Top,
+                        Width = "100%",
+                        Padding = "12,0,12,10",
+                        Background = "#FAFAFA",
+                        Bindings =
+                        {
+                            {
+                                nameof(Visibility),
+                                nameof(MainViewModel.IsShowingNewChatPanel),
+                                null,
+                                BindingMode.OneWay,
+                                BoolToVisibility,
+                                null
+                            },
+                        },
+                        Child = new StackPanel
+                        {
+                            Width = "100%",
+                            Children =
+                            {
+                                new TextBlock
+                                {
+                                    Text = "New chat",
+                                    FontSize = 13,
+                                    FontStyle = FontStyles.Bold,
+                                    Foreground = "#1B1B1B",
+                                },
+                                new TextBox
+                                {
+                                    Width = "100%",
+                                    Height = 34,
+                                    MarginTop = 8,
+                                    Background = "#FFFFFF",
+                                    BorderFill = "#D0D0D0",
+                                    BorderStroke = "1",
+                                    CornerRadius = "8",
+                                    Padding = "8,7,8,7",
+                                    Bindings =
+                                    {
+                                        {
+                                            nameof(TextBox.Text),
+                                            nameof(MainViewModel.NewContactServiceId),
+                                            null,
+                                            BindingMode.TwoWay
+                                        },
+                                    },
+                                },
+                                new TextBox
+                                {
+                                    Width = "100%",
+                                    Height = 34,
+                                    MarginTop = 6,
+                                    Background = "#FFFFFF",
+                                    BorderFill = "#D0D0D0",
+                                    BorderStroke = "1",
+                                    CornerRadius = "8",
+                                    Padding = "8,7,8,7",
+                                    Bindings =
+                                    {
+                                        {
+                                            nameof(TextBox.Text),
+                                            nameof(MainViewModel.NewContactName),
+                                            null,
+                                            BindingMode.TwoWay
+                                        },
+                                    },
+                                },
+                                new TextBlock
+                                {
+                                    Text = "ACI (UUID) + optional display name",
+                                    FontSize = 11,
+                                    Foreground = "#8E8E8E",
+                                    MarginTop = 4,
+                                },
+                                new StackPanel
+                                {
+                                    Orientation = Orientation.Horizontal,
+                                    MarginTop = 8,
+                                    Children =
+                                    {
+                                        new Button
+                                        {
+                                            Content = "Start",
+                                            Width = 88,
+                                            Height = 32,
+                                            Background = SignalBlue,
+                                            Foreground = "#FFFFFF",
+                                            BorderFill = "Transparent",
+                                            CornerRadius = "8",
+                                            Commands =
+                                            {
+                                                {
+                                                    nameof(Button.Click),
+                                                    (s, e) => _ = _viewModel.AddContactCommand.ExecuteAsync(null)
+                                                },
+                                            },
+                                        },
+                                        new Button
+                                        {
+                                            Content = "Cancel",
+                                            Width = 88,
+                                            Height = 32,
+                                            MarginLeft = 8,
+                                            Background = "#E7E7E7",
+                                            Foreground = "#1B1B1B",
+                                            BorderFill = "Transparent",
+                                            CornerRadius = "8",
+                                            Commands =
+                                            {
+                                                {
+                                                    nameof(Button.Click),
+                                                    (s, e) => _viewModel.CloseNewChatCommand.Execute(null)
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    new ListBox
+                    {
+                        Width = "100%",
+                        Height = "100%",
+                        Background = "#FFFFFF",
+                        ItemTemplate = typeof(ConversationListItem),
+                        Bindings =
+                        {
+                            { nameof(ListBox.Items), nameof(MainViewModel.FilteredConversations) },
+                            {
+                                nameof(ListBox.SelectedValue),
+                                nameof(MainViewModel.SelectedConversation),
+                                null,
+                                BindingMode.TwoWay
+                            },
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    private UIElement BuildChatThreadColumn()
+    {
+        // Fill remaining DockPanel space (must be last undocked child).
+        return new Border
+        {
+            Width = "100%",
+            Height = "100%",
+            Background = "#FFFFFF",
+            Bindings =
+            {
+                {
+                    nameof(Visibility),
+                    nameof(MainViewModel.IsShowingChatMain),
+                    null,
+                    BindingMode.OneWay,
+                    BoolToVisibility,
+                    null
+                },
+            },
+            Child = new DockPanel
+            {
+                Width = "100%",
+                Height = "100%",
+                Children =
+                {
+                    // Thread header
+                    new Border
+                    {
+                        [DockPanel.Dock] = Dock.Top,
+                        Width = "100%",
+                        Height = 64,
+                        Background = "#FFFFFF",
+                        BorderFill = "#E0E0E0",
+                        BorderStroke = "0,0,0,1",
+                        Child = new DockPanel
+                        {
+                            Width = "100%",
+                            Height = "100%",
+                            Children =
+                            {
+                                new TextBlock
+                                {
+                                    [DockPanel.Dock] = Dock.Right,
+                                    FontSize = 12,
+                                    Foreground = "#8E8E8E",
+                                    MarginTop = 24,
+                                    MarginRight = 16,
+                                    Bindings =
+                                    {
+                                        { nameof(TextBlock.Text), nameof(MainViewModel.StatusText) },
+                                    },
+                                },
+                                new Border
+                                {
+                                    [DockPanel.Dock] = Dock.Left,
+                                    Width = 40,
+                                    Height = 40,
+                                    MarginLeft = 16,
+                                    MarginTop = 12,
+                                    Background = "#C5C8CE",
+                                    CornerRadius = "20",
+                                    Child = new TextBlock
+                                    {
+                                        FontSize = 16,
+                                        FontStyle = FontStyles.Bold,
+                                        Foreground = "#FFFFFF",
+                                        MarginLeft = 13,
+                                        MarginTop = 9,
+                                        Bindings =
+                                        {
+                                            {
+                                                nameof(TextBlock.Text),
+                                                nameof(MainViewModel.SelectedConversationInitial)
+                                            },
+                                        },
+                                    },
+                                },
+                                new TextBlock
+                                {
+                                    FontSize = 16,
+                                    FontStyle = FontStyles.Bold,
+                                    Foreground = "#1B1B1B",
+                                    MarginLeft = 12,
+                                    MarginTop = 20,
+                                    Bindings =
+                                    {
+                                        {
+                                            nameof(TextBlock.Text),
+                                            nameof(MainViewModel.SelectedConversationTitle)
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    // Composer
+                    new Border
+                    {
+                        [DockPanel.Dock] = Dock.Bottom,
+                        Width = "100%",
+                        Height = 64,
+                        Padding = "12,10,12,10",
+                        Background = "#FFFFFF",
+                        BorderFill = "#E0E0E0",
+                        BorderStroke = "0,1,0,0",
+                        Child = new DockPanel
+                        {
+                            Width = "100%",
+                            Height = "100%",
+                            Children =
+                            {
+                                new Button
+                                {
+                                    [DockPanel.Dock] = Dock.Left,
+                                    Content = "+",
+                                    Width = 40,
+                                    Height = 40,
+                                    Background = "#F0F0F0",
+                                    BorderFill = "Transparent",
+                                    CornerRadius = "20",
+                                    Foreground = "#3B3B3B",
+                                    Commands =
+                                    {
+                                        {
+                                            nameof(Button.Click),
+                                            (s, e) => _ = _viewModel.AttachFileCommand.ExecuteAsync(null)
+                                        },
+                                    },
+                                },
+                                new Button
+                                {
+                                    [DockPanel.Dock] = Dock.Right,
+                                    Content = "➤",
+                                    Width = 40,
+                                    Height = 40,
+                                    Background = SignalBlue,
+                                    Foreground = "#FFFFFF",
+                                    BorderFill = "Transparent",
+                                    CornerRadius = "20",
+                                    Commands =
+                                    {
+                                        {
+                                            nameof(Button.Click),
+                                            (s, e) => _ = _viewModel.SendCommand.ExecuteAsync(null)
+                                        },
+                                    },
+                                },
+                                new Border
+                                {
+                                    Width = "100%",
+                                    Height = 40,
+                                    MarginLeft = 8,
+                                    MarginRight = 8,
+                                    Background = "#F0F0F0",
+                                    CornerRadius = "20",
+                                    Child = new TextBox
+                                    {
+                                        Width = "100%",
+                                        Height = 40,
+                                        Background = "Transparent",
+                                        BorderFill = "Transparent",
+                                        Padding = "14,10,14,10",
+                                        FontSize = 15,
+                                        Bindings =
+                                        {
+                                            {
+                                                nameof(TextBox.Text),
+                                                nameof(MainViewModel.ComposeText),
+                                                null,
+                                                BindingMode.TwoWay
+                                            },
+                                            {
+                                                nameof(TextBox.IsEnabled),
+                                                nameof(MainViewModel.HasSelectedConversation),
+                                                null,
+                                                BindingMode.OneWay
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    // Messages + empty state
+                    new Panel
+                    {
+                        Width = "100%",
+                        Height = "100%",
+                        Background = "#FFFFFF",
+                        Children =
+                        {
+                            new ListBox
+                            {
+                                Width = "100%",
+                                Height = "100%",
+                                Background = "#FFFFFF",
+                                ItemTemplate = typeof(MessageListItem),
+                                Bindings =
+                                {
+                                    { nameof(ListBox.Items), nameof(MainViewModel.Messages) },
+                                    {
+                                        nameof(Visibility),
+                                        nameof(MainViewModel.HasSelectedConversation),
+                                        null,
+                                        BindingMode.OneWay,
+                                        BoolToVisibility,
+                                        null
+                                    },
+                                },
+                            },
+                            new StackPanel
+                            {
+                                Width = 360,
+                                MarginTop = 180,
+                                IsHitTestVisible = false,
+                                Bindings =
+                                {
+                                    {
+                                        nameof(Visibility),
+                                        nameof(MainViewModel.HasSelectedConversation),
+                                        null,
+                                        BindingMode.OneWay,
+                                        a => a is true ? Visibility.Collapsed : Visibility.Visible,
+                                        null
+                                    },
+                                    {
+                                        nameof(MarginLeft),
+                                        nameof(MainViewModel.HasSelectedConversation),
+                                        null,
+                                        BindingMode.OneWay,
+                                        _ => (object)"auto",
+                                        null
+                                    },
+                                    {
+                                        nameof(MarginRight),
+                                        nameof(MainViewModel.HasSelectedConversation),
+                                        null,
+                                        BindingMode.OneWay,
+                                        _ => (object)"auto",
+                                        null
+                                    },
+                                },
+                                Children =
+                                {
+                                    new SignalBubbleIcon
+                                    {
+                                        Width = 64,
+                                        Height = 64,
+                                        MarginLeft = 148,
+                                    },
+                                    new TextBlock
+                                    {
+                                        Text = "Select a chat",
+                                        FontSize = 20,
+                                        FontStyle = FontStyles.Bold,
+                                        Foreground = "#1B1B1B",
+                                        MarginTop = 16,
+                                        TextAlignment = TextAlignment.Center,
+                                        Width = 360,
+                                    },
+                                    new TextBlock
+                                    {
+                                        Text = "Or tap ✎ to start a new conversation",
+                                        FontSize = 14,
+                                        Foreground = "#8E8E8E",
+                                        MarginTop = 8,
+                                        TextAlignment = TextAlignment.Center,
+                                        Width = 360,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+    }
 
     private UIElement BuildSettingsPanel()
     {
@@ -1066,7 +1651,8 @@ public class MainWindow : Window
             Width = "100%",
             Height = "100%",
             Background = "#FFFFFF",
-            Padding = "24",
+            ZIndex = 30,
+            Padding = "32",
             Bindings =
             {
                 {
@@ -1080,21 +1666,21 @@ public class MainWindow : Window
             },
             Child = new StackPanel
             {
-                Width = "100%",
+                Width = 520,
                 Children =
                 {
                     new TextBlock
                     {
-                        Text = "设置",
-                        FontSize = 20,
+                        Text = "Settings",
+                        FontSize = 24,
                         FontStyle = FontStyles.Bold,
-                        Foreground = "#0F172A",
+                        Foreground = "#1B1B1B",
                     },
                     new TextBlock
                     {
-                        MarginTop = 12,
+                        MarginTop = 16,
                         FontSize = 13,
-                        Foreground = "#334155",
+                        Foreground = "#4B5563",
                         Bindings =
                         {
                             { nameof(TextBlock.Text), nameof(MainViewModel.SettingsSummary) },
@@ -1102,8 +1688,8 @@ public class MainWindow : Window
                     },
                     new CheckBox
                     {
-                        Content = "启用桌面通知提示",
-                        MarginTop = 16,
+                        Content = "Desktop notification tips",
+                        MarginTop = 20,
                         Bindings =
                         {
                             {
@@ -1114,71 +1700,21 @@ public class MainWindow : Window
                             },
                         },
                     },
-                    new TextBlock
-                    {
-                        Text = "添加联系人（对方 ACI UUID）",
-                        MarginTop = 20,
-                        FontSize = 14,
-                        FontStyle = FontStyles.Bold,
-                    },
-                    new TextBox
-                    {
-                        Width = 420,
-                        MarginTop = 8,
-                        Height = 32,
-                        Bindings =
-                        {
-                            {
-                                nameof(TextBox.Text),
-                                nameof(MainViewModel.NewContactServiceId),
-                                null,
-                                BindingMode.TwoWay
-                            },
-                        },
-                    },
-                    new TextBox
-                    {
-                        Width = 420,
-                        MarginTop = 8,
-                        Height = 32,
-                        Bindings =
-                        {
-                            {
-                                nameof(TextBox.Text),
-                                nameof(MainViewModel.NewContactName),
-                                null,
-                                BindingMode.TwoWay
-                            },
-                        },
-                    },
                     new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
-                        MarginTop = 12,
+                        MarginTop = 24,
                         Children =
                         {
                             new Button
                             {
-                                Content = "添加联系人",
+                                Content = "Save",
                                 Width = 100,
-                                Height = 32,
+                                Height = 36,
                                 Background = SignalBlue,
                                 Foreground = "#FFFFFF",
                                 BorderFill = null,
-                                Commands =
-                                {
-                                    {
-                                        nameof(Button.Click),
-                                        (s, e) => _ = _viewModel.AddContactCommand.ExecuteAsync(null)
-                                    },
-                                },
-                            },
-                            new Button
-                            {
-                                Content = "保存设置",
-                                Width = 100,
-                                Height = 32,
-                                MarginLeft = 8,
+                                CornerRadius = "8",
                                 Commands =
                                 {
                                     {
@@ -1189,282 +1725,19 @@ public class MainWindow : Window
                             },
                             new Button
                             {
-                                Content = "返回聊天",
-                                Width = 100,
-                                Height = 32,
-                                MarginLeft = 8,
+                                Content = "Back to chats",
+                                Width = 120,
+                                Height = 36,
+                                MarginLeft = 10,
+                                Background = "#E7E7E7",
+                                Foreground = "#1B1B1B",
+                                BorderFill = null,
+                                CornerRadius = "8",
                                 Commands =
                                 {
                                     {
                                         nameof(Button.Click),
                                         (s, e) => _viewModel.ToggleSettingsCommand.Execute(null)
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-        };
-    }
-
-    private UIElement BuildChatMainPanel()
-    {
-        return new Grid
-        {
-            Width = "100%",
-            Height = "100%",
-            ColumnDefinitions =
-            {
-                new ColumnDefinition { Width = "280" },
-                new ColumnDefinition { Width = "1*" },
-            },
-            Bindings =
-            {
-                {
-                    nameof(Visibility),
-                    nameof(MainViewModel.IsShowingChatMain),
-                    null,
-                    BindingMode.OneWay,
-                    BoolToVisibility,
-                    null
-                },
-            },
-            Children =
-            {
-                new Border
-                {
-                    Width = "100%",
-                    Height = "100%",
-                    Background = "#F8FAFC",
-                    BorderFill = "#CBD5E1",
-                    BorderStroke = "0,0,1,0",
-                    [Grid.ColumnIndex] = 0,
-                    Child = new DockPanel
-                    {
-                        Width = "100%",
-                        Height = "100%",
-                        Children =
-                        {
-                            new Border
-                            {
-                                [DockPanel.Dock] = Dock.Top,
-                                Width = "100%",
-                                Padding = "10,10,10,8",
-                                Background = "#F1F5F9",
-                                BorderFill = "#E2E8F0",
-                                BorderStroke = "0,0,0,1",
-                                Child = new StackPanel
-                                {
-                                    Width = "100%",
-                                    Children =
-                                    {
-                                        new TextBlock
-                                        {
-                                            Text = "开始聊天",
-                                            FontSize = 12,
-                                            FontStyle = FontStyles.Bold,
-                                            Foreground = "#334155",
-                                        },
-                                        new TextBox
-                                        {
-                                            Width = "100%",
-                                            Height = 30,
-                                            MarginTop = 6,
-                                            Background = "#FFFFFF",
-                                            BorderFill = "#CBD5E1",
-                                            BorderStroke = "1",
-                                            Padding = "6,6,6,6",
-                                            Bindings =
-                                            {
-                                                {
-                                                    nameof(TextBox.Text),
-                                                    nameof(MainViewModel.NewContactServiceId),
-                                                    null,
-                                                    BindingMode.TwoWay
-                                                },
-                                            },
-                                        },
-                                        new TextBox
-                                        {
-                                            Width = "100%",
-                                            Height = 30,
-                                            MarginTop = 6,
-                                            Background = "#FFFFFF",
-                                            BorderFill = "#CBD5E1",
-                                            BorderStroke = "1",
-                                            Padding = "6,6,6,6",
-                                            Bindings =
-                                            {
-                                                {
-                                                    nameof(TextBox.Text),
-                                                    nameof(MainViewModel.NewContactName),
-                                                    null,
-                                                    BindingMode.TwoWay
-                                                },
-                                            },
-                                        },
-                                        new Button
-                                        {
-                                            Content = "添加并打开会话",
-                                            Width = "100%",
-                                            Height = 32,
-                                            MarginTop = 8,
-                                            Background = SignalBlue,
-                                            Foreground = "#FFFFFF",
-                                            BorderFill = null,
-                                            CornerRadius = "4",
-                                            Commands =
-                                            {
-                                                {
-                                                    nameof(Button.Click),
-                                                    (s, e) => _ = _viewModel.AddContactCommand.ExecuteAsync(null)
-                                                },
-                                            },
-                                        },
-                                        new TextBlock
-                                        {
-                                            Text = "填写对方 ACI（UUID），显示名可选",
-                                            Width = "100%",
-                                            FontSize = 11,
-                                            Foreground = "#64748B",
-                                            MarginTop = 6,
-                                        },
-                                    },
-                                },
-                            },
-                            new ListBox
-                            {
-                                Width = "100%",
-                                Height = "100%",
-                                Background = "Transparent",
-                                ItemTemplate = typeof(ConversationListItem),
-                                Bindings =
-                                {
-                                    { nameof(ListBox.Items), nameof(MainViewModel.Conversations) },
-                                    {
-                                        nameof(ListBox.SelectedValue),
-                                        nameof(MainViewModel.SelectedConversation),
-                                        null,
-                                        BindingMode.TwoWay
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-                new DockPanel
-                {
-                    Width = "100%",
-                    Height = "100%",
-                    [Grid.ColumnIndex] = 1,
-                    Children =
-                    {
-                        new Border
-                        {
-                            [DockPanel.Dock] = Dock.Bottom,
-                            Width = "100%",
-                            Padding = "10,8,10,8",
-                            Background = "#E2E8F0",
-                            Height = 56,
-                            Child = new Grid
-                            {
-                                Width = "100%",
-                                Height = "100%",
-                                ColumnDefinitions =
-                                {
-                                    new ColumnDefinition { Width = "1*" },
-                                    new ColumnDefinition { Width = "auto" },
-                                },
-                                Children =
-                                {
-                                    new TextBox
-                                    {
-                                        Width = "100%",
-                                        Height = 36,
-                                        MarginTop = 2,
-                                        Background = "#FFFFFF",
-                                        BorderFill = "#94A3B8",
-                                        BorderStroke = "1",
-                                        CornerRadius = "4",
-                                        Padding = "8,8,8,8",
-                                        FontSize = 14,
-                                        Bindings =
-                                        {
-                                            {
-                                                nameof(TextBox.Text),
-                                                nameof(MainViewModel.ComposeText),
-                                                null,
-                                                BindingMode.TwoWay
-                                            },
-                                            {
-                                                nameof(TextBox.IsEnabled),
-                                                nameof(MainViewModel.SelectedConversation),
-                                                null,
-                                                BindingMode.OneWay,
-                                                a => a is not null,
-                                                null
-                                            },
-                                        },
-                                    },
-                                    new Button
-                                    {
-                                        Content = "发送",
-                                        [Grid.ColumnIndex] = 1,
-                                        Width = 72,
-                                        Height = 36,
-                                        MarginLeft = 8,
-                                        MarginTop = 2,
-                                        Background = SignalBlue,
-                                        Foreground = "#FFFFFF",
-                                        BorderFill = null,
-                                        CornerRadius = "4",
-                                        Commands =
-                                        {
-                                            {
-                                                nameof(Button.Click),
-                                                (s, e) => _ = _viewModel.SendCommand.ExecuteAsync(null)
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                        new Panel
-                        {
-                            Width = "100%",
-                            Height = "100%",
-                            Children =
-                            {
-                                new ListBox
-                                {
-                                    Width = "100%",
-                                    Height = "100%",
-                                    Background = "#FFFFFF",
-                                    ItemTemplate = typeof(MessageListItem),
-                                    Bindings =
-                                    {
-                                        { nameof(ListBox.Items), nameof(MainViewModel.Messages) },
-                                    },
-                                },
-                                new TextBlock
-                                {
-                                    Text = "选择左侧会话，或添加联系人后开始聊天",
-                                    FontSize = 14,
-                                    Foreground = "#94A3B8",
-                                    MarginTop = 180,
-                                    MarginLeft = 120,
-                                    IsHitTestVisible = false,
-                                    Bindings =
-                                    {
-                                        {
-                                            nameof(Visibility),
-                                            nameof(MainViewModel.SelectedConversation),
-                                            null,
-                                            BindingMode.OneWay,
-                                            a => a is null ? Visibility.Visible : Visibility.Collapsed,
-                                            null
-                                        },
                                     },
                                 },
                             },

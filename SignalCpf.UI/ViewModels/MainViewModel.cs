@@ -122,10 +122,20 @@ public partial class MainViewModel : ObservableObject
         IsShowingRegisterMode && (RegisterCodeSent || RegisterCaptchaRequired);
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedConversation))]
+    [NotifyPropertyChangedFor(nameof(SelectedConversationTitle))]
+    [NotifyPropertyChangedFor(nameof(SelectedConversationInitial))]
     private ConversationItemViewModel? _selectedConversation;
 
     [ObservableProperty]
     private string _composeText = string.Empty;
+
+    [ObservableProperty]
+    private string _conversationFilter = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsShowingNewChatPanel))]
+    private bool _isNewChatOpen;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsShowingSettings))]
@@ -151,12 +161,18 @@ public partial class MainViewModel : ObservableObject
     public bool IsShowingChat => IsRegistered;
     public bool IsShowingChatMain => IsRegistered && !SettingsOpen;
     public bool IsShowingSettings => IsRegistered && SettingsOpen;
+    public bool IsShowingNewChatPanel => IsRegistered && IsNewChatOpen && !SettingsOpen;
     public bool IsShowingLinkMode => !IsRegistered && !IsRegisterMode;
     public bool IsShowingRegisterMode => !IsRegistered && IsRegisterMode;
     public bool IsShowingQrCard =>
         !IsRegistered && !IsRegisterMode && !IsLinkInProgress && !IsQrLoading;
 
+    public bool HasSelectedConversation => SelectedConversation is not null;
+    public string SelectedConversationTitle => SelectedConversation?.Title ?? "Signal";
+    public string SelectedConversationInitial => SelectedConversation?.AvatarInitial ?? "S";
+
     public ObservableCollection<ConversationItemViewModel> Conversations { get; } = [];
+    public ObservableCollection<ConversationItemViewModel> FilteredConversations { get; } = [];
     public ObservableCollection<MessageItemViewModel> Messages { get; } = [];
     public ObservableCollection<ContactItemViewModel> Contacts { get; } = [];
 
@@ -585,19 +601,52 @@ public partial class MainViewModel : ObservableObject
         foreach (var c in list)
             Conversations.Add(new ConversationItemViewModel(c));
 
+        ApplyConversationFilter();
+
         if (Conversations.Count == 0)
         {
             SelectedConversation = null;
             StatusText = IsRegistered
-                ? $"已注册: {await RegisteredNumberAsync()} — 左侧添加联系人开始聊天"
+                ? $"已注册: {await RegisteredNumberAsync()}"
                 : StatusText;
             return;
         }
 
         SelectedConversation =
-            Conversations.FirstOrDefault(c => c.Id == previousId)
+            FilteredConversations.FirstOrDefault(c => c.Id == previousId)
+            ?? FilteredConversations.FirstOrDefault()
             ?? Conversations[0];
     }
+
+    partial void OnConversationFilterChanged(string value) => ApplyConversationFilter();
+
+    private void ApplyConversationFilter()
+    {
+        var q = ConversationFilter.Trim();
+        FilteredConversations.Clear();
+        IEnumerable<ConversationItemViewModel> src = Conversations;
+        if (!string.IsNullOrEmpty(q))
+        {
+            src = Conversations.Where(c =>
+                c.Title.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || c.Preview.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || (c.ServiceId?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        foreach (var c in src)
+            FilteredConversations.Add(c);
+    }
+
+    [RelayCommand]
+    private void ToggleNewChat()
+    {
+        IsNewChatOpen = !IsNewChatOpen;
+        if (IsNewChatOpen)
+            SettingsOpen = false;
+    }
+
+    [RelayCommand]
+    private void CloseNewChat() => IsNewChatOpen = false;
 
     private async Task<string> RegisteredNumberAsync()
     {
@@ -643,7 +692,10 @@ public partial class MainViewModel : ObservableObject
     {
         SettingsOpen = !SettingsOpen;
         if (SettingsOpen)
+        {
+            IsNewChatOpen = false;
             _ = RefreshSettingsAsync();
+        }
     }
 
     [RelayCommand]
@@ -679,6 +731,7 @@ public partial class MainViewModel : ObservableObject
             NewContactServiceId = string.Empty;
             NewContactName = string.Empty;
             SettingsOpen = false;
+            IsNewChatOpen = false;
             await RefreshContactsAsync();
             await RefreshConversationsAsync();
             SelectedConversation = Conversations.FirstOrDefault(c => c.Id == id);
@@ -879,8 +932,42 @@ public sealed class ConversationItemViewModel(Conversation model) : ObservableOb
 {
     public string Id { get; } = model.Id;
     public string? ServiceId { get; } = model.ServiceId;
-    public string Title { get; } = model.Title;
-    public string Preview { get; } = model.LastMessagePreview ?? string.Empty;
+    public string Title { get; } = string.IsNullOrWhiteSpace(model.Title) ? (model.ServiceId ?? "Chat") : model.Title;
+    public string Preview { get; } = model.LastMessagePreview ?? "尚无消息";
+    public long LastMessageAtMs { get; } = model.LastMessageAtMs;
+    public int UnreadCount { get; } = model.UnreadCount;
+    public bool HasUnread => UnreadCount > 0;
+    public string UnreadLabel => UnreadCount > 99 ? "99+" : UnreadCount.ToString();
+    public string AvatarInitial
+    {
+        get
+        {
+            var t = Title.Trim();
+            return t.Length == 0 ? "?" : char.ToUpperInvariant(t[0]).ToString();
+        }
+    }
+
+    public string TimeLabel => FormatChatTime(LastMessageAtMs);
+
+    internal static string FormatChatTime(long unixMs)
+    {
+        if (unixMs <= 0)
+            return string.Empty;
+        var dt = DateTimeOffset.FromUnixTimeMilliseconds(unixMs).ToLocalTime();
+        var now = DateTimeOffset.Now;
+        var age = now - dt;
+        if (age.TotalMinutes < 1)
+            return "now";
+        if (age.TotalHours < 1)
+            return $"{(int)age.TotalMinutes}m";
+        if (dt.Date == now.Date)
+            return dt.ToString("h:mm tt");
+        if (dt.Date == now.Date.AddDays(-1))
+            return "Yesterday";
+        if (age.TotalDays < 7)
+            return dt.ToString("ddd");
+        return dt.ToString("M/d/yy");
+    }
 }
 
 public sealed class ContactItemViewModel(ContactInfo model) : ObservableObject
@@ -896,8 +983,12 @@ public sealed class MessageItemViewModel : ObservableObject
         Id = model.Id;
         Body = model.Body ?? string.Empty;
         IsOutgoing = model.IsOutgoing;
-        BubbleBackground = IsOutgoing ? "#2C6BED" : "#E5E7EB";
-        BubbleForeground = IsOutgoing ? "#FFFFFF" : "#111827";
+        BubbleBackground = IsOutgoing ? "#3A76F0" : "#E9E9E9";
+        BubbleForeground = IsOutgoing ? "#FFFFFF" : "#1B1B1B";
+        var time = ConversationItemViewModel.FormatChatTime(model.SentAtMs);
+        MetaLabel = IsOutgoing
+            ? (string.IsNullOrEmpty(time) ? "✓✓" : $"{time}  ✓✓")
+            : time;
     }
 
     public string Id { get; }
@@ -905,4 +996,5 @@ public sealed class MessageItemViewModel : ObservableObject
     public bool IsOutgoing { get; }
     public string BubbleBackground { get; }
     public string BubbleForeground { get; }
+    public string MetaLabel { get; }
 }
