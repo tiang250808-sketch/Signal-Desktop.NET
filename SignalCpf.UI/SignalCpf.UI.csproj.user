@@ -5,10 +5,16 @@
     <Compile Update="Controls\ConversationListItem.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Update="Controls\CountryDialListItem.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Update="Controls\MessageListItem.cs">
       <SubType>Component</SubType>
     </Compile>
     <Compile Update="Controls\SignalBubbleIcon.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\SignalHeroLogo.cs">
       <SubType>Component</SubType>
     </Compile>
     <Compile Update="Controls\SignalLogo.cs">

@@ -26,7 +26,7 @@ public partial class MainViewModel : ObservableObject
     private bool _isRegistered;
 
     [ObservableProperty]
-    private string _deviceName = "CPF Desktop";
+    private string _deviceName = "Desktop";
 
     [ObservableProperty]
     private string? _provisioningUrl;
