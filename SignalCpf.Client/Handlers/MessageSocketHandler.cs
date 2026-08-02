@@ -52,10 +52,23 @@ internal sealed class MessageSocketHandler : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _messageLoopCts?.Cancel();
+        try
+        {
+            _messageLoopCts?.Cancel();
+        }
+        catch
+        {
+            // ignore
+        }
+
         if (_messageSocket is not null)
+        {
             await _messageSocket.DisposeAsync();
-        _messageSocket = null;
+            _messageSocket = null;
+        }
+
+        _messageLoopCts?.Dispose();
+        _messageLoopCts = null;
     }
 
     private async Task ConsumeEnvelopesAsync(CancellationToken ct)

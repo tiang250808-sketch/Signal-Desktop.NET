@@ -372,7 +372,7 @@ public sealed class SignalClientOrchestrator : ISignalSidecarClient, IAsyncDispo
             await d.DisposeAsync();
         else if (_messages is IDisposable sync)
             sync.Dispose();
-        _rest.Dispose();
+        await _rest.DisposeAsync();
         _state.Events.Writer.TryComplete();
     }
 }

@@ -66,7 +66,7 @@ public static class CountryDialCodes
     ];
 
     public static CountryDialOption Default =>
-        All.First(c => c.Iso == "US");
+        All.First(c => c.Iso == "CN");
 
     public static CountryDialOption? FindByDialCode(string? dialCode)
     {

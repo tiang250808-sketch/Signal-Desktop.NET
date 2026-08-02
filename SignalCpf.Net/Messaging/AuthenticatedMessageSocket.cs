@@ -132,16 +132,46 @@ public sealed class AuthenticatedMessageSocket : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _loopCts?.Cancel();
-        if (_loopTask is not null)
+        try
         {
-            try { await _loopTask; }
-            catch { /* ignore */ }
+            _loopCts?.Cancel();
+        }
+        catch
+        {
+            // ignore
         }
 
+        // Close the socket first so ReceiveAsync unblocks promptly.
         if (_connection is not null)
-            await _connection.DisposeAsync();
+        {
+            try
+            {
+                await _connection.DisposeAsync();
+            }
+            catch
+            {
+                // ignore
+            }
 
+            _connection = null;
+        }
+
+        if (_loopTask is not null)
+        {
+            try
+            {
+                await _loopTask.WaitAsync(TimeSpan.FromSeconds(2));
+            }
+            catch
+            {
+                // ignore hang/cancel during shutdown
+            }
+
+            _loopTask = null;
+        }
+
+        _loopCts?.Dispose();
+        _loopCts = null;
         _envelopes.Writer.TryComplete();
     }
 }

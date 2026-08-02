@@ -124,7 +124,16 @@ internal sealed class RegistrationHandler
                     Client = "ios",
                 },
                 cancellationToken);
-            return await AdvanceSessionAsync(session, requestCode: false, cancellationToken);
+            // Code was already sent above; don't request again — just emit CodeRequested status.
+            _registrationSessionId = session.Id;
+            var status = ToStatus(
+                session,
+                RegistrationProgressKind.CodeRequested,
+                _registrationTransport == "voice"
+                    ? $"语音验证码已拨打至 {_registrationNumber}，请接听"
+                    : $"验证码已请求发送至 {_registrationNumber}。若未收到可改用 Call，或稍后再点 Send SMS");
+            await EmitAsync(status, cancellationToken);
+            return status;
         }
         catch (SignalApiException ex)
         {
@@ -229,6 +238,7 @@ internal sealed class RegistrationHandler
             return captchaNeeded;
         }
 
+        var codeSent = false;
         if (requestCode && session.AllowedToRequestCode)
         {
             session = await _rest.RequestVerificationCodeAsync(
@@ -236,10 +246,12 @@ internal sealed class RegistrationHandler
                 new VerificationCodeRequest
                 {
                     Transport = _registrationTransport,
+                    // Desktop maps to UNKNOWN; ios selects SMS templates used by primary clients.
                     Client = "ios",
                 },
                 ct);
             _registrationSessionId = session.Id;
+            codeSent = true;
 
             requested = session.RequestedInformation ?? [];
             needsCaptcha = requested.Any(i =>
@@ -255,16 +267,24 @@ internal sealed class RegistrationHandler
             }
         }
 
-        var kind = session.AllowedToRequestCode || !string.IsNullOrEmpty(session.Id)
-            ? RegistrationProgressKind.CodeRequested
-            : RegistrationProgressKind.SessionCreated;
-        var message = kind == RegistrationProgressKind.CodeRequested
-            ? $"验证码已发送至 {_registrationNumber}（{_registrationTransport}）"
-            : "验证会话已创建";
-        if (!session.AllowedToRequestCode && needsCaptcha)
+        RegistrationProgressKind kind;
+        string message;
+        if (codeSent)
+        {
+            kind = RegistrationProgressKind.CodeRequested;
+            message = _registrationTransport == "voice"
+                ? $"语音验证码已拨打至 {_registrationNumber}，请接听"
+                : $"验证码已请求发送至 {_registrationNumber}。若未收到，请完成 Captcha 后重试，或改用 Call 语音验证";
+        }
+        else if (!session.AllowedToRequestCode && needsCaptcha)
         {
             kind = RegistrationProgressKind.CaptchaRequired;
-            message = "需要完成 Captcha 后才能获取验证码";
+            message = "需要先完成 Captcha：打开下方链接 → 完成后复制 signalcaptcha:// 令牌 → 粘贴并提交，才会发送短信";
+        }
+        else
+        {
+            kind = RegistrationProgressKind.SessionCreated;
+            message = "验证会话已创建";
         }
 
         var status = ToStatus(session, kind, message);
@@ -432,26 +452,53 @@ internal sealed class RegistrationHandler
     {
         var message = ex.StatusCode switch
         {
+            400 => DescribeBadRequest(ex),
+            409 => "尚不能发送验证码：请先完成并提交 Captcha。",
+            418 => "短信通道无法投递，请点击 Call 改用语音验证。",
             423 => "该号码已启用 Registration Lock（PIN），本客户端暂不支持。",
             429 => "请求过于频繁，请稍后重试。",
             401 => "验证会话未通过，请重新开始注册。",
-            403 => "Captcha 或验证被拒绝，请重试。",
+            403 => "Captcha 被服务器拒绝。请重新完成验证（令牌只能用一次且很快过期；浏览器与客户端须同一公网 IP，关闭 VPN）。",
             404 => "验证会话不存在或已过期，请重新开始注册。",
-            422 => "请求参数无效，请检查手机号格式（E.164，如 +8613812345678）。",
-            440 => "短信/语音通道拒绝投递验证码，请换通道或稍后再试。",
+            422 => "请求参数无效，请检查手机号格式（选择正确国家码，仅输入国内号码数字）。",
+            440 => "运营商拒绝投递验证码，请改用 Call 语音或稍后再试。",
+            498 => "服务器要求通过 WebSocket 注册。请重试；若仍失败，检查网络是否可访问 wss 端点。",
             499 => "服务器要求更新的客户端能力（含 PQ）。请确认已构建 libsignal FFI。",
             _ => $"注册失败（HTTP {ex.StatusCode}）：{ex.Message}",
         };
+
+        // Keep captcha step available after a rejected/expired token so the user can retry.
+        var keepCaptcha = ex.StatusCode is 403 or 400 or 409
+                          && !string.IsNullOrEmpty(_registrationSessionId);
 
         return new RegistrationSessionStatus(
             RegistrationProgressKind.Failed,
             message,
             SessionId: _registrationSessionId,
             Number: _registrationNumber,
-            CaptchaRequired: false,
+            CaptchaRequired: keepCaptcha,
             AllowedToRequestCode: false,
             Verified: false,
             ChallengeUrl: _options.ChallengeUrl);
+    }
+
+    private static string DescribeBadRequest(SignalApiException ex)
+    {
+        var body = ex.ResponseBody ?? string.Empty;
+        // NonNormalizedPhoneNumberExceptionMapper returns original/normalized hints.
+        if (body.Contains("normalizedNumber", StringComparison.OrdinalIgnoreCase)
+            || body.Contains("originalNumber", StringComparison.OrdinalIgnoreCase))
+        {
+            return "手机号格式未规范化。请确认国家码正确，国内号码不要加 0 或重复国家码。";
+        }
+
+        // ImpossiblePhoneNumberExceptionMapper returns HTTP 400 with an empty body.
+        if (string.IsNullOrWhiteSpace(body) || body.Contains("Bad Request", StringComparison.OrdinalIgnoreCase))
+        {
+            return "手机号无效。请选择正确国家码，并只输入国内号码数字（例如中国：11 位，勿加 0）。";
+        }
+
+        return $"注册失败（HTTP 400）：{ex.Message}";
     }
 
     private void ClearState()
@@ -470,7 +517,7 @@ internal sealed class RegistrationHandler
         if (!n.StartsWith('+'))
             throw new ArgumentException("手机号须为 E.164 格式（以 + 开头，如 +8613812345678）", nameof(raw));
         if (n.Length < 8 || n.Length > 16 || !n[1..].All(char.IsDigit))
-            throw new ArgumentException("手机号格式无效", nameof(raw));
+            throw new ArgumentException("手机号格式无效：请选择正确国家码，并只输入国内号码数字", nameof(raw));
         return n;
     }
 
@@ -481,11 +528,25 @@ internal sealed class RegistrationHandler
     {
         if (string.IsNullOrWhiteSpace(captcha))
             return null;
-        var t = captcha.Trim();
-        const string prefix = "signalcaptcha://";
-        if (t.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            t = t[prefix.Length..];
-        return string.IsNullOrWhiteSpace(t) ? null : t;
+        var t = captcha.Trim().Trim('"', '\'');
+
+        // Browsers sometimes rewrite the custom scheme as http(s)://signalcaptcha//…
+        foreach (var bad in new[]
+                 {
+                     "https://signalcaptcha//", "http://signalcaptcha//",
+                     "https://signalcaptcha/", "http://signalcaptcha/",
+                     "signalcaptcha://",
+                 })
+        {
+            if (t.StartsWith(bad, StringComparison.OrdinalIgnoreCase))
+            {
+                t = t[bad.Length..];
+                break;
+            }
+        }
+
+        // Server expects: scheme.sitekey.action.token  (e.g. signal-hcaptcha-short.…registration.…)
+        return string.IsNullOrWhiteSpace(t) ? null : t.Trim();
     }
 
     private static string NormalizeVerificationCode(string code)

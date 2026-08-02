@@ -4,10 +4,11 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SignalCpf.Core.Options;
+using SignalCpf.Net.WebSocket;
 
 namespace SignalCpf.Net.Http;
 
-public sealed class SignalRestClient : IDisposable
+public sealed class SignalRestClient : IDisposable, IAsyncDisposable
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -17,12 +18,14 @@ public sealed class SignalRestClient : IDisposable
     };
 
     private readonly HttpClient _http;
+    private readonly UnauthenticatedApiSocket _unauthWs;
     private AuthenticationHeaderValue? _auth;
 
     public SignalRestClient(SignalServerOptions options, HttpClient? httpClient = null)
     {
         Options = options;
         _http = httpClient ?? SignalHttpClientFactory.Create(options);
+        _unauthWs = new UnauthenticatedApiSocket(options);
     }
 
     public SignalServerOptions Options { get; }
@@ -72,100 +75,138 @@ public sealed class SignalRestClient : IDisposable
         return parsed;
     }
 
-    public async Task<VerificationSessionResponse> CreateVerificationSessionAsync(
+    public Task<VerificationSessionResponse> CreateVerificationSessionAsync(
         CreateVerificationSessionRequest body,
-        CancellationToken ct = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Post, "v1/verification/session")
-        {
-            Content = JsonContent.Create(body, options: JsonOpts),
-        };
-        using var resp = await _http.SendAsync(req, ct);
-        return await ReadVerificationSessionAsync(resp, ct);
-    }
+        CancellationToken ct = default) =>
+        SendVerificationAsync(HttpMethod.Post, "v1/verification/session", body, ct);
 
-    public async Task<VerificationSessionResponse> UpdateVerificationSessionAsync(
+    public Task<VerificationSessionResponse> UpdateVerificationSessionAsync(
         string sessionId,
         UpdateVerificationSessionRequest body,
-        CancellationToken ct = default)
-    {
-        using var req = new HttpRequestMessage(
+        CancellationToken ct = default) =>
+        SendVerificationAsync(
             HttpMethod.Patch,
-            $"v1/verification/session/{Uri.EscapeDataString(sessionId)}")
-        {
-            Content = JsonContent.Create(body, options: JsonOpts),
-        };
-        using var resp = await _http.SendAsync(req, ct);
-        return await ReadVerificationSessionAsync(resp, ct);
-    }
+            $"v1/verification/session/{Uri.EscapeDataString(sessionId)}",
+            body,
+            ct);
 
     public async Task<VerificationSessionResponse> RequestVerificationCodeAsync(
         string sessionId,
         VerificationCodeRequest body,
         CancellationToken ct = default)
     {
-        using var req = new HttpRequestMessage(
+        var (status, text) = await SendRegistrationTransportAsync(
             HttpMethod.Post,
-            $"v1/verification/session/{Uri.EscapeDataString(sessionId)}/code")
+            $"v1/verification/session/{Uri.EscapeDataString(sessionId)}/code",
+            body,
+            includeAuth: false,
+            ct);
+
+        // Unlike create/update, code-send must be 2xx — 409/418/429 bodies are failures, not success.
+        if (status is >= 200 and < 300)
         {
-            Content = JsonContent.Create(body, options: JsonOpts),
+            return JsonSerializer.Deserialize<VerificationSessionResponse>(text, JsonOpts)
+                   ?? throw new SignalApiException(status, "Empty verification code response");
+        }
+
+        var hint = status switch
+        {
+            409 => "尚不能发送验证码（可能仍需完成 Captcha，或会话已验证）",
+            418 => "当前短信通道无法投递，请改用语音验证（Call）",
+            429 => "发送过于频繁，请稍后再试",
+            440 => "运营商拒绝投递验证码，请改用语音或稍后再试",
+            _ => text,
         };
-        using var resp = await _http.SendAsync(req, ct);
-        return await ReadVerificationSessionAsync(resp, ct);
+        throw new SignalApiException(status, string.IsNullOrWhiteSpace(text) ? hint : $"{hint} | {text}");
     }
 
-    public async Task<VerificationSessionResponse> SubmitVerificationCodeAsync(
+    public Task<VerificationSessionResponse> SubmitVerificationCodeAsync(
         string sessionId,
         SubmitVerificationCodeRequest body,
-        CancellationToken ct = default)
-    {
-        using var req = new HttpRequestMessage(
+        CancellationToken ct = default) =>
+        SendVerificationAsync(
             HttpMethod.Put,
-            $"v1/verification/session/{Uri.EscapeDataString(sessionId)}/code")
-        {
-            Content = JsonContent.Create(body, options: JsonOpts),
-        };
-        using var resp = await _http.SendAsync(req, ct);
-        return await ReadVerificationSessionAsync(resp, ct);
-    }
+            $"v1/verification/session/{Uri.EscapeDataString(sessionId)}/code",
+            body,
+            ct);
 
     public async Task<AccountCreationResponse> RegisterAccountAsync(
         RegistrationRequest body,
         CancellationToken ct = default)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, "v1/registration")
-        {
-            Content = JsonContent.Create(body, options: JsonOpts),
-        };
-        ApplyAuth(req);
-        using var resp = await _http.SendAsync(req, ct);
-        var text = await resp.Content.ReadAsStringAsync(ct);
-        if (!resp.IsSuccessStatusCode)
-            throw new SignalApiException((int)resp.StatusCode, text);
+        var (status, text) = await SendRegistrationTransportAsync(
+            HttpMethod.Post, "v1/registration", body, includeAuth: true, ct);
 
-        var parsed = JsonSerializer.Deserialize<AccountCreationResponse>(text, JsonOpts)
-                     ?? throw new SignalApiException((int)resp.StatusCode, "Empty registration response");
-        return parsed;
+        if (status is < 200 or >= 300)
+            throw new SignalApiException(status, text);
+
+        return JsonSerializer.Deserialize<AccountCreationResponse>(text, JsonOpts)
+               ?? throw new SignalApiException(status, "Empty registration response");
     }
 
-    private static async Task<VerificationSessionResponse> ReadVerificationSessionAsync(
-        HttpResponseMessage resp,
+    private async Task<VerificationSessionResponse> SendVerificationAsync<TBody>(
+        HttpMethod method,
+        string path,
+        TBody body,
         CancellationToken ct)
     {
-        var text = await resp.Content.ReadAsStringAsync(ct);
+        var (status, text) = await SendRegistrationTransportAsync(
+            method, path, body, includeAuth: false, ct);
+        return ParseVerificationSession(status, text);
+    }
+
+    /// <summary>
+    /// Official/Staging enforce RestDeprecationFilter (HTTP 498 "use websockets") for modern UAs.
+    /// Prefer the unauthenticated chat WebSocket there; self-hosted keeps HTTPS with WS fallback.
+    /// </summary>
+    private async Task<(int Status, string Body)> SendRegistrationTransportAsync<TBody>(
+        HttpMethod method,
+        string path,
+        TBody body,
+        bool includeAuth,
+        CancellationToken ct)
+    {
+        var authHeader = includeAuth ? _auth?.ToString() : null;
+
+        if (Options.IsOfficialLike)
+            return await _unauthWs.SendJsonAsync(method.Method, path, body, JsonOpts, authHeader, ct);
+
+        try
+        {
+            using var req = new HttpRequestMessage(method, path.TrimStart('/'))
+            {
+                Content = JsonContent.Create(body, options: JsonOpts),
+            };
+            if (includeAuth)
+                ApplyAuth(req);
+            using var resp = await _http.SendAsync(req, ct);
+            var text = await resp.Content.ReadAsStringAsync(ct);
+            if ((int)resp.StatusCode != 498)
+                return ((int)resp.StatusCode, text);
+        }
+        catch (HttpRequestException)
+        {
+            // Fall through to WebSocket when HTTPS path is unavailable.
+        }
+
+        return await _unauthWs.SendJsonAsync(method.Method, path, body, JsonOpts, authHeader, ct);
+    }
+
+    private static VerificationSessionResponse ParseVerificationSession(int statusCode, string text)
+    {
         // 409/429/418 often still return a session body the client should inspect.
-        if ((int)resp.StatusCode is 409 or 429 or 418)
+        if (statusCode is 409 or 429 or 418)
         {
             var conflict = JsonSerializer.Deserialize<VerificationSessionResponse>(text, JsonOpts);
             if (conflict is not null && !string.IsNullOrEmpty(conflict.Id))
                 return conflict;
         }
 
-        if (!resp.IsSuccessStatusCode)
-            throw new SignalApiException((int)resp.StatusCode, text);
+        if (statusCode is < 200 or >= 300)
+            throw new SignalApiException(statusCode, text);
 
         return JsonSerializer.Deserialize<VerificationSessionResponse>(text, JsonOpts)
-               ?? throw new SignalApiException((int)resp.StatusCode, "Empty verification session response");
+               ?? throw new SignalApiException(statusCode, "Empty verification session response");
     }
 
     public async Task RegisterPreKeysAsync(
@@ -289,7 +330,14 @@ public sealed class SignalRestClient : IDisposable
             req.Headers.Authorization = _auth;
     }
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose() =>
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+    public async ValueTask DisposeAsync()
+    {
+        await _unauthWs.DisposeAsync();
+        _http.Dispose();
+    }
 }
 
 public sealed class SignalApiException(int statusCode, string body)

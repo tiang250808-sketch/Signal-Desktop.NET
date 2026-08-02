@@ -33,8 +33,15 @@ internal static class Program
         }
         finally
         {
-            // Orchestrator / SqliteMessageStore are IAsyncDisposable-only.
-            services.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            // Orchestrator may already be disposed by MainWindow shutdown; second dispose is no-op.
+            try
+            {
+                services.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(3));
+            }
+            catch
+            {
+                // ignore shutdown races
+            }
         }
     }
 

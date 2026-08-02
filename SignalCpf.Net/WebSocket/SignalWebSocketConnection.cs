@@ -68,6 +68,7 @@ public sealed class SignalWebSocketConnection : IAsyncDisposable
         string verb,
         string path,
         byte[]? body = null,
+        IEnumerable<string>? headers = null,
         CancellationToken ct = default)
     {
         var wsMessage = new WebSocketMessage
@@ -82,6 +83,11 @@ public sealed class SignalWebSocketConnection : IAsyncDisposable
         };
         if (body is { Length: > 0 })
             wsMessage.Request.Body = ByteString.CopyFrom(body);
+        if (headers is not null)
+        {
+            foreach (var header in headers)
+                wsMessage.Request.Headers.Add(header);
+        }
 
         await SendProtoAsync(wsMessage, ct);
     }

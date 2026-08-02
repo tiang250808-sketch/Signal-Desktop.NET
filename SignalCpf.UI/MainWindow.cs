@@ -1,6 +1,7 @@
 using CPF;
 using CPF.Controls;
 using CPF.Drawing;
+using CPF.Platform;
 using CPF.Shapes;
 using SignalCpf.UI.Controls;
 using SignalCpf.UI.ViewModels;
@@ -55,7 +56,19 @@ public class MainWindow : Window
             if (_shuttingDown)
                 return;
             _shuttingDown = true;
-            await _viewModel.ShutdownAsync();
+            try
+            {
+                await _viewModel.ShutdownAsync();
+            }
+            catch
+            {
+                // Best-effort cleanup; still exit the process.
+            }
+            finally
+            {
+                // CPF does not always leave Run() when the last window closes.
+                Application.Exit();
+            }
         };
     }
 
@@ -375,14 +388,42 @@ public class MainWindow : Window
                                 MarginTop = 11,
                                 Background = "#D1D5DB",
                             },
+                            // Placeholder behind the TextBox; must not intercept clicks.
+                            new TextBlock
+                            {
+                                Text = "Phone Number",
+                                FontSize = 14,
+                                Foreground = "#9CA3AF",
+                                MarginLeft = 114,
+                                MarginTop = 13,
+                                IsHitTestVisible = false,
+                                Bindings =
+                                {
+                                    {
+                                        nameof(Visibility),
+                                        nameof(MainViewModel.RegisterNationalNumber),
+                                        null,
+                                        BindingMode.OneWay,
+                                        a => string.IsNullOrEmpty(a as string)
+                                            ? Visibility.Visible
+                                            : Visibility.Collapsed,
+                                        null
+                                    },
+                                },
+                            },
                             new TextBox
                             {
-                                Width = 200,
-                                Height = 28,
-                                MarginLeft = 110,
-                                MarginTop = 8,
+                                Width = 208,
+                                Height = 44,
+                                MarginLeft = 108,
+                                MarginTop = 0,
                                 Background = null,
                                 BorderFill = null,
+                                // Vertically center 14px text inside the 44px field.
+                                Padding = "4,12,4,12",
+                                FontSize = 14,
+                                AcceptsReturn = false,
+                                MaxLength = 15,
                                 Bindings =
                                 {
                                     {
@@ -397,27 +438,6 @@ public class MainWindow : Window
                                         null,
                                         BindingMode.OneWay,
                                         a => !(bool)a!,
-                                        null
-                                    },
-                                },
-                            },
-                            new TextBlock
-                            {
-                                Text = "Phone Number",
-                                FontSize = 14,
-                                Foreground = "#9CA3AF",
-                                MarginLeft = 114,
-                                MarginTop = 12,
-                                Bindings =
-                                {
-                                    {
-                                        nameof(Visibility),
-                                        nameof(MainViewModel.RegisterNationalNumber),
-                                        null,
-                                        BindingMode.OneWay,
-                                        a => string.IsNullOrEmpty(a as string)
-                                            ? Visibility.Visible
-                                            : Visibility.Collapsed,
                                         null
                                     },
                                 },
@@ -508,22 +528,23 @@ public class MainWindow : Window
         };
     }
 
-    /// <summary>Solid chevron matching the 14px country-code text height.</summary>
+    /// <summary>Solid chevron sized to match the 14px country-code text.</summary>
     private static UIElement BuildCountryChevron()
     {
         var chevron = new Polygon
         {
-            Width = 14,
-            Height = 14,
+            Width = 18,
+            Height = 16,
             MarginLeft = 70,
-            MarginTop = 13,
-            Fill = "#6B7280",
+            MarginTop = 12,
+            Fill = "#4B5563",
             StrokeFill = null,
             IsAntiAlias = true,
         };
-        chevron.Points.Add(new Point(0, 3));
-        chevron.Points.Add(new Point(14, 3));
-        chevron.Points.Add(new Point(7, 12));
+        // Full-height triangle so visual size matches "+N" glyphs.
+        chevron.Points.Add(new Point(0, 1));
+        chevron.Points.Add(new Point(18, 1));
+        chevron.Points.Add(new Point(9, 15));
         return chevron;
     }
 
@@ -564,7 +585,7 @@ public class MainWindow : Window
                     {
                         new TextBlock
                         {
-                            Text = "Captcha required",
+                            Text = "需要完成 Captcha 后才会发送短信",
                             Width = 320,
                             FontSize = 13,
                             Foreground = "#374151",
@@ -572,30 +593,37 @@ public class MainWindow : Window
                         },
                         new TextBlock
                         {
+                            Text = "浏览器完成验证后，右键「Open Signal」复制链接，粘贴到下方并提交",
                             Width = 320,
-                            FontSize = 11,
-                            Foreground = SignalBlue,
-                            MarginTop = 4,
+                            FontSize = 12,
+                            Foreground = "#6B7280",
+                            MarginTop = 6,
                             TextAlignment = TextAlignment.Center,
-                            Bindings =
+                        },
+                        new Button
+                        {
+                            Content = "在浏览器中打开 Captcha",
+                            Width = 320,
+                            Height = 36,
+                            MarginTop = 10,
+                            Background = SignalBlue,
+                            Foreground = "#FFFFFF",
+                            BorderFill = null,
+                            CornerRadius = "4",
+                            Commands =
                             {
                                 {
-                                    nameof(TextBlock.Text),
-                                    nameof(MainViewModel.RegisterChallengeUrl),
-                                    null,
-                                    BindingMode.OneWay,
-                                    a => string.IsNullOrWhiteSpace(a as string)
-                                        ? "Open captcha page, then paste token below"
-                                        : (string)a!,
-                                    null
+                                    nameof(Button.Click),
+                                    (s, e) => _viewModel.OpenCaptchaPageCommand.Execute(null)
                                 },
                             },
                         },
                         new TextBox
                         {
                             Width = 320,
-                            Height = 36,
-                            MarginTop = 8,
+                            Height = 56,
+                            MarginTop = 10,
+                            AcceptsReturn = true,
                             Bindings =
                             {
                                 {
@@ -608,9 +636,9 @@ public class MainWindow : Window
                         },
                         new Button
                         {
-                            Content = "Submit Captcha",
+                            Content = "提交 Captcha（提交后发送短信）",
                             Width = 320,
-                            Height = 40,
+                            Height = 36,
                             MarginTop = 8,
                             Background = SignalBlue,
                             Foreground = "#FFFFFF",
@@ -639,7 +667,7 @@ public class MainWindow : Window
                 },
                 new TextBlock
                 {
-                    Text = "Verification code",
+                    Text = "验证码",
                     Width = 320,
                     FontSize = 13,
                     Foreground = "#374151",
@@ -651,6 +679,8 @@ public class MainWindow : Window
                     Width = 320,
                     Height = 40,
                     MarginTop = 8,
+                    AcceptsReturn = false,
+                    MaxLength = 10,
                     Bindings =
                     {
                         {
@@ -663,7 +693,44 @@ public class MainWindow : Window
                 },
                 new Button
                 {
-                    Content = "Continue",
+                    Content = "重新发送短信",
+                    Width = 320,
+                    Height = 36,
+                    MarginTop = 8,
+                    CornerRadius = "4",
+                    Background = "#E5E7EB",
+                    Foreground = "#1B1B1B",
+                    BorderFill = null,
+                    Commands =
+                    {
+                        {
+                            nameof(Button.Click),
+                            (s, e) => _ = _viewModel.RequestRegistrationCodeCommand.ExecuteAsync(null)
+                        },
+                    },
+                    Bindings =
+                    {
+                        {
+                            nameof(Button.IsEnabled),
+                            nameof(MainViewModel.IsRegisterBusy),
+                            null,
+                            BindingMode.OneWay,
+                            a => !(bool)a!,
+                            null
+                        },
+                        {
+                            nameof(Visibility),
+                            nameof(MainViewModel.RegisterCodeSent),
+                            null,
+                            BindingMode.OneWay,
+                            BoolToVisibility,
+                            null
+                        },
+                    },
+                },
+                new Button
+                {
+                    Content = "继续",
                     Width = 320,
                     Height = 44,
                     MarginTop = 12,
@@ -933,11 +1000,14 @@ public class MainWindow : Window
                 new Border
                 {
                     [DockPanel.Dock] = Dock.Top,
-                    Padding = "12,8,12,8",
+                    Width = "100%",
+                    Padding = "12,0,12,0",
                     Background = "#0F172A",
                     Height = 48,
                     Child = new Grid
                     {
+                        Width = "100%",
+                        Height = "100%",
                         ColumnDefinitions =
                         {
                             new ColumnDefinition { Width = "1*" },
@@ -948,7 +1018,8 @@ public class MainWindow : Window
                             new TextBlock
                             {
                                 Foreground = "#F8FAFC",
-                                MarginTop = 8,
+                                FontSize = 13,
+                                MarginTop = 14,
                                 Bindings =
                                 {
                                     { nameof(TextBlock.Text), nameof(MainViewModel.StatusText) },
@@ -958,52 +1029,12 @@ public class MainWindow : Window
                             {
                                 [Grid.ColumnIndex] = 1,
                                 Orientation = Orientation.Horizontal,
+                                MarginTop = 10,
                                 Children =
                                 {
-                                    new Button
-                                    {
-                                        Content = "刷新",
-                                        Width = 64,
-                                        Height = 28,
-                                        MarginTop = 4,
-                                        Commands =
-                                        {
-                                            {
-                                                nameof(Button.Click),
-                                                (s, e) => _ = _viewModel.RefreshConversationsCommand.ExecuteAsync(null)
-                                            },
-                                        },
-                                    },
-                                    new Button
-                                    {
-                                        Content = "附件",
-                                        Width = 64,
-                                        Height = 28,
-                                        MarginLeft = 6,
-                                        MarginTop = 4,
-                                        Commands =
-                                        {
-                                            {
-                                                nameof(Button.Click),
-                                                (s, e) => _ = _viewModel.AttachFileCommand.ExecuteAsync(null)
-                                            },
-                                        },
-                                    },
-                                    new Button
-                                    {
-                                        Content = "设置",
-                                        Width = 64,
-                                        Height = 28,
-                                        MarginLeft = 6,
-                                        MarginTop = 4,
-                                        Commands =
-                                        {
-                                            {
-                                                nameof(Button.Click),
-                                                (s, e) => _viewModel.ToggleSettingsCommand.Execute(null)
-                                            },
-                                        },
-                                    },
+                                    MakeHeaderButton("刷新", () => _ = _viewModel.RefreshConversationsCommand.ExecuteAsync(null)),
+                                    MakeHeaderButton("附件", () => _ = _viewModel.AttachFileCommand.ExecuteAsync(null), marginLeft: 6),
+                                    MakeHeaderButton("设置", () => _viewModel.ToggleSettingsCommand.Execute(null), marginLeft: 6),
                                 },
                             },
                         },
@@ -1015,10 +1046,25 @@ public class MainWindow : Window
         };
     }
 
+    private static Button MakeHeaderButton(string content, Action onClick, float marginLeft = 0) =>
+        new()
+        {
+            Content = content,
+            Width = 64,
+            Height = 28,
+            MarginLeft = marginLeft,
+            Commands =
+            {
+                { nameof(Button.Click), (s, e) => onClick() },
+            },
+        };
+
     private UIElement BuildSettingsPanel()
     {
         return new Border
         {
+            Width = "100%",
+            Height = "100%",
             Background = "#FFFFFF",
             Padding = "24",
             Bindings =
@@ -1034,6 +1080,7 @@ public class MainWindow : Window
             },
             Child = new StackPanel
             {
+                Width = "100%",
                 Children =
                 {
                     new TextBlock
@@ -1069,15 +1116,16 @@ public class MainWindow : Window
                     },
                     new TextBlock
                     {
-                        Text = "添加联系人（ServiceId / ACI）",
+                        Text = "添加联系人（对方 ACI UUID）",
                         MarginTop = 20,
                         FontSize = 14,
                         FontStyle = FontStyles.Bold,
                     },
                     new TextBox
                     {
+                        Width = 420,
                         MarginTop = 8,
-                        Height = 28,
+                        Height = 32,
                         Bindings =
                         {
                             {
@@ -1090,8 +1138,9 @@ public class MainWindow : Window
                     },
                     new TextBox
                     {
+                        Width = 420,
                         MarginTop = 8,
-                        Height = 28,
+                        Height = 32,
                         Bindings =
                         {
                             {
@@ -1112,7 +1161,10 @@ public class MainWindow : Window
                             {
                                 Content = "添加联系人",
                                 Width = 100,
-                                Height = 28,
+                                Height = 32,
+                                Background = SignalBlue,
+                                Foreground = "#FFFFFF",
+                                BorderFill = null,
                                 Commands =
                                 {
                                     {
@@ -1125,7 +1177,7 @@ public class MainWindow : Window
                             {
                                 Content = "保存设置",
                                 Width = 100,
-                                Height = 28,
+                                Height = 32,
                                 MarginLeft = 8,
                                 Commands =
                                 {
@@ -1139,7 +1191,7 @@ public class MainWindow : Window
                             {
                                 Content = "返回聊天",
                                 Width = 100,
-                                Height = 28,
+                                Height = 32,
                                 MarginLeft = 8,
                                 Commands =
                                 {
@@ -1160,6 +1212,8 @@ public class MainWindow : Window
     {
         return new Grid
         {
+            Width = "100%",
+            Height = "100%",
             ColumnDefinitions =
             {
                 new ColumnDefinition { Width = "280" },
@@ -1180,39 +1234,143 @@ public class MainWindow : Window
             {
                 new Border
                 {
+                    Width = "100%",
+                    Height = "100%",
                     Background = "#F8FAFC",
                     BorderFill = "#CBD5E1",
                     BorderStroke = "0,0,1,0",
                     [Grid.ColumnIndex] = 0,
-                    Child = new ListBox
+                    Child = new DockPanel
                     {
-                        Background = "Transparent",
-                        ItemTemplate = typeof(ConversationListItem),
-                        Bindings =
+                        Width = "100%",
+                        Height = "100%",
+                        Children =
                         {
-                            { nameof(ListBox.Items), nameof(MainViewModel.Conversations) },
+                            new Border
                             {
-                                nameof(ListBox.SelectedValue),
-                                nameof(MainViewModel.SelectedConversation),
-                                null,
-                                BindingMode.TwoWay
+                                [DockPanel.Dock] = Dock.Top,
+                                Width = "100%",
+                                Padding = "10,10,10,8",
+                                Background = "#F1F5F9",
+                                BorderFill = "#E2E8F0",
+                                BorderStroke = "0,0,0,1",
+                                Child = new StackPanel
+                                {
+                                    Width = "100%",
+                                    Children =
+                                    {
+                                        new TextBlock
+                                        {
+                                            Text = "开始聊天",
+                                            FontSize = 12,
+                                            FontStyle = FontStyles.Bold,
+                                            Foreground = "#334155",
+                                        },
+                                        new TextBox
+                                        {
+                                            Width = "100%",
+                                            Height = 30,
+                                            MarginTop = 6,
+                                            Background = "#FFFFFF",
+                                            BorderFill = "#CBD5E1",
+                                            BorderStroke = "1",
+                                            Padding = "6,6,6,6",
+                                            Bindings =
+                                            {
+                                                {
+                                                    nameof(TextBox.Text),
+                                                    nameof(MainViewModel.NewContactServiceId),
+                                                    null,
+                                                    BindingMode.TwoWay
+                                                },
+                                            },
+                                        },
+                                        new TextBox
+                                        {
+                                            Width = "100%",
+                                            Height = 30,
+                                            MarginTop = 6,
+                                            Background = "#FFFFFF",
+                                            BorderFill = "#CBD5E1",
+                                            BorderStroke = "1",
+                                            Padding = "6,6,6,6",
+                                            Bindings =
+                                            {
+                                                {
+                                                    nameof(TextBox.Text),
+                                                    nameof(MainViewModel.NewContactName),
+                                                    null,
+                                                    BindingMode.TwoWay
+                                                },
+                                            },
+                                        },
+                                        new Button
+                                        {
+                                            Content = "添加并打开会话",
+                                            Width = "100%",
+                                            Height = 32,
+                                            MarginTop = 8,
+                                            Background = SignalBlue,
+                                            Foreground = "#FFFFFF",
+                                            BorderFill = null,
+                                            CornerRadius = "4",
+                                            Commands =
+                                            {
+                                                {
+                                                    nameof(Button.Click),
+                                                    (s, e) => _ = _viewModel.AddContactCommand.ExecuteAsync(null)
+                                                },
+                                            },
+                                        },
+                                        new TextBlock
+                                        {
+                                            Text = "填写对方 ACI（UUID），显示名可选",
+                                            Width = "100%",
+                                            FontSize = 11,
+                                            Foreground = "#64748B",
+                                            MarginTop = 6,
+                                        },
+                                    },
+                                },
+                            },
+                            new ListBox
+                            {
+                                Width = "100%",
+                                Height = "100%",
+                                Background = "Transparent",
+                                ItemTemplate = typeof(ConversationListItem),
+                                Bindings =
+                                {
+                                    { nameof(ListBox.Items), nameof(MainViewModel.Conversations) },
+                                    {
+                                        nameof(ListBox.SelectedValue),
+                                        nameof(MainViewModel.SelectedConversation),
+                                        null,
+                                        BindingMode.TwoWay
+                                    },
+                                },
                             },
                         },
                     },
                 },
                 new DockPanel
                 {
+                    Width = "100%",
+                    Height = "100%",
                     [Grid.ColumnIndex] = 1,
                     Children =
                     {
                         new Border
                         {
                             [DockPanel.Dock] = Dock.Bottom,
-                            Padding = "8",
+                            Width = "100%",
+                            Padding = "10,8,10,8",
                             Background = "#E2E8F0",
-                            Height = 48,
+                            Height = 56,
                             Child = new Grid
                             {
+                                Width = "100%",
+                                Height = "100%",
                                 ColumnDefinitions =
                                 {
                                     new ColumnDefinition { Width = "1*" },
@@ -1222,8 +1380,15 @@ public class MainWindow : Window
                                 {
                                     new TextBox
                                     {
-                                        Height = 28,
+                                        Width = "100%",
+                                        Height = 36,
                                         MarginTop = 2,
+                                        Background = "#FFFFFF",
+                                        BorderFill = "#94A3B8",
+                                        BorderStroke = "1",
+                                        CornerRadius = "4",
+                                        Padding = "8,8,8,8",
+                                        FontSize = 14,
                                         Bindings =
                                         {
                                             {
@@ -1232,6 +1397,14 @@ public class MainWindow : Window
                                                 null,
                                                 BindingMode.TwoWay
                                             },
+                                            {
+                                                nameof(TextBox.IsEnabled),
+                                                nameof(MainViewModel.SelectedConversation),
+                                                null,
+                                                BindingMode.OneWay,
+                                                a => a is not null,
+                                                null
+                                            },
                                         },
                                     },
                                     new Button
@@ -1239,9 +1412,13 @@ public class MainWindow : Window
                                         Content = "发送",
                                         [Grid.ColumnIndex] = 1,
                                         Width = 72,
-                                        Height = 28,
+                                        Height = 36,
                                         MarginLeft = 8,
                                         MarginTop = 2,
+                                        Background = SignalBlue,
+                                        Foreground = "#FFFFFF",
+                                        BorderFill = null,
+                                        CornerRadius = "4",
                                         Commands =
                                         {
                                             {
@@ -1253,13 +1430,43 @@ public class MainWindow : Window
                                 },
                             },
                         },
-                        new ListBox
+                        new Panel
                         {
-                            Background = "#FFFFFF",
-                            ItemTemplate = typeof(MessageListItem),
-                            Bindings =
+                            Width = "100%",
+                            Height = "100%",
+                            Children =
                             {
-                                { nameof(ListBox.Items), nameof(MainViewModel.Messages) },
+                                new ListBox
+                                {
+                                    Width = "100%",
+                                    Height = "100%",
+                                    Background = "#FFFFFF",
+                                    ItemTemplate = typeof(MessageListItem),
+                                    Bindings =
+                                    {
+                                        { nameof(ListBox.Items), nameof(MainViewModel.Messages) },
+                                    },
+                                },
+                                new TextBlock
+                                {
+                                    Text = "选择左侧会话，或添加联系人后开始聊天",
+                                    FontSize = 14,
+                                    Foreground = "#94A3B8",
+                                    MarginTop = 180,
+                                    MarginLeft = 120,
+                                    IsHitTestVisible = false,
+                                    Bindings =
+                                    {
+                                        {
+                                            nameof(Visibility),
+                                            nameof(MainViewModel.SelectedConversation),
+                                            null,
+                                            BindingMode.OneWay,
+                                            a => a is null ? Visibility.Visible : Visibility.Collapsed,
+                                            null
+                                        },
+                                    },
+                                },
                             },
                         },
                     },

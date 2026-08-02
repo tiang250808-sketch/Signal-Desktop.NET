@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CPF.Drawing;
@@ -185,6 +186,13 @@ public partial class MainViewModel : ObservableObject
         var match = CountryDialCodes.FindByDialCode(normalized);
         if (match is not null)
             SelectedCountry = match;
+    }
+
+    partial void OnRegisterNationalNumberChanged(string value)
+    {
+        var digits = new string((value ?? "").Where(char.IsDigit).ToArray());
+        if (!string.Equals(value, digits, StringComparison.Ordinal))
+            RegisterNationalNumber = digits;
     }
 
     private static string NormalizeDialCode(string? raw)
@@ -388,16 +396,54 @@ public partial class MainViewModel : ObservableObject
         var cc = (countryCode ?? "").Trim().Replace(" ", "", StringComparison.Ordinal);
         if (!cc.StartsWith('+'))
             cc = "+" + cc.TrimStart('+');
+
         var digits = new string((national ?? "").Where(char.IsDigit).ToArray());
+        // National fields must not include trunk prefix or a duplicated country code.
+        digits = digits.TrimStart('0');
+        var ccDigits = cc.TrimStart('+');
+        if (digits.StartsWith(ccDigits, StringComparison.Ordinal)
+            && digits.Length >= ccDigits.Length + 7)
+        {
+            digits = digits[ccDigits.Length..].TrimStart('0');
+        }
+
         return string.IsNullOrEmpty(digits) ? cc : cc + digits;
     }
 
     private static bool LooksLikeValidPhone(string countryCode, string national)
     {
         var e164 = ComposeE164(countryCode, national);
-        return e164.Length is >= 10 and <= 16
-               && e164.StartsWith('+')
-               && e164[1..].All(char.IsDigit);
+        // Mirror Signal server "possible number" length bounds roughly (E.164 max 15 digits).
+        var nationalDigits = e164.StartsWith('+') ? e164[1..] : e164;
+        var ccDigits = (countryCode ?? "").Trim().TrimStart('+');
+        if (nationalDigits.StartsWith(ccDigits, StringComparison.Ordinal))
+            nationalDigits = nationalDigits[ccDigits.Length..];
+
+        return e164.StartsWith('+')
+               && e164.Length is >= 10 and <= 16
+               && e164[1..].All(char.IsDigit)
+               && nationalDigits.Length is >= 6 and <= 14;
+    }
+
+    [RelayCommand]
+    private void OpenCaptchaPage()
+    {
+        var url = string.IsNullOrWhiteSpace(RegisterChallengeUrl)
+            ? "https://signalcaptchas.org/registration/generate.html"
+            : RegisterChallengeUrl.Trim();
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true,
+            });
+            StatusText = "已在浏览器打开 Captcha：完成后右键「Open Signal」复制链接，粘贴到下方并提交";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"无法打开浏览器：{ex.Message}。请手动访问：{url}";
+        }
     }
 
     [RelayCommand]
@@ -415,10 +461,19 @@ public partial class MainViewModel : ObservableObject
             StatusText = "正在提交 Captcha…";
             var status = await _client.SubmitRegistrationCaptchaAsync(RegisterCaptchaToken.Trim());
             ApplyRegistrationStatus(status);
+            if (status.Kind is RegistrationProgressKind.CodeRequested
+                or RegistrationProgressKind.Verified
+                or RegistrationProgressKind.Registered)
+            {
+                RegisterCaptchaToken = string.Empty;
+            }
         }
         catch (Exception ex)
         {
-            StatusText = $"Captcha 失败：{RootMessage(ex)}";
+            // Token is single-use; clear so the user pastes a freshly solved captcha.
+            RegisterCaptchaToken = string.Empty;
+            RegisterCaptchaRequired = true;
+            StatusText = RootMessage(ex);
         }
         finally
         {
@@ -482,6 +537,7 @@ public partial class MainViewModel : ObservableObject
 
     private void ApplyRegistrationStatus(RegistrationSessionStatus status)
     {
+        var captchaJustRequired = status.CaptchaRequired && !RegisterCaptchaRequired;
         RegisterCaptchaRequired = status.CaptchaRequired;
         RegisterChallengeUrl = status.ChallengeUrl;
         RegisterCodeSent = status.Kind is RegistrationProgressKind.CodeRequested
@@ -489,6 +545,9 @@ public partial class MainViewModel : ObservableObject
             or RegistrationProgressKind.Registered;
         if (!string.IsNullOrWhiteSpace(status.Message))
             StatusText = status.Message;
+
+        if (captchaJustRequired)
+            OpenCaptchaPage();
     }
 
     private static string RootMessage(Exception ex)
@@ -520,10 +579,37 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task RefreshConversationsAsync()
     {
+        var previousId = SelectedConversation?.Id;
         Conversations.Clear();
         var list = await _client.ListConversationsAsync();
         foreach (var c in list)
             Conversations.Add(new ConversationItemViewModel(c));
+
+        if (Conversations.Count == 0)
+        {
+            SelectedConversation = null;
+            StatusText = IsRegistered
+                ? $"已注册: {await RegisteredNumberAsync()} — 左侧添加联系人开始聊天"
+                : StatusText;
+            return;
+        }
+
+        SelectedConversation =
+            Conversations.FirstOrDefault(c => c.Id == previousId)
+            ?? Conversations[0];
+    }
+
+    private async Task<string> RegisteredNumberAsync()
+    {
+        try
+        {
+            var account = await _client.GetAccountStatusAsync();
+            return account.Number ?? account.ServiceId ?? "已注册";
+        }
+        catch
+        {
+            return "已注册";
+        }
     }
 
     [RelayCommand]
@@ -576,19 +662,32 @@ public partial class MainViewModel : ObservableObject
     private async Task AddContactAsync()
     {
         if (string.IsNullOrWhiteSpace(NewContactServiceId))
+        {
+            StatusText = "请填写对方 ACI（UUID）";
             return;
+        }
 
         var id = NewContactServiceId.Trim();
-        await _client.UpsertContactAsync(new ContactInfo(
-            id,
-            Number: null,
-            ProfileName: string.IsNullOrWhiteSpace(NewContactName) ? id : NewContactName.Trim(),
-            About: null));
-        NewContactServiceId = string.Empty;
-        NewContactName = string.Empty;
-        await RefreshContactsAsync();
-        await RefreshConversationsAsync();
-        StatusText = "联系人已添加";
+        var name = string.IsNullOrWhiteSpace(NewContactName) ? id : NewContactName.Trim();
+        try
+        {
+            await _client.UpsertContactAsync(new ContactInfo(
+                id,
+                Number: null,
+                ProfileName: name,
+                About: null));
+            NewContactServiceId = string.Empty;
+            NewContactName = string.Empty;
+            SettingsOpen = false;
+            await RefreshContactsAsync();
+            await RefreshConversationsAsync();
+            SelectedConversation = Conversations.FirstOrDefault(c => c.Id == id);
+            StatusText = $"已打开与 {name} 的会话";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"添加联系人失败：{RootMessage(ex)}";
+        }
     }
 
     [RelayCommand]
@@ -639,17 +738,37 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task SendAsync()
     {
-        if (SelectedConversation is null || string.IsNullOrWhiteSpace(ComposeText))
+        if (SelectedConversation is null)
+        {
+            StatusText = "请先选择或添加会话";
             return;
+        }
+
+        if (string.IsNullOrWhiteSpace(ComposeText))
+        {
+            StatusText = "请输入要发送的内容";
+            return;
+        }
 
         var body = ComposeText.Trim();
-        ComposeText = string.Empty;
-        var sent = await _client.SendTextMessageAsync(
-            SelectedConversation.Id,
-            SelectedConversation.ServiceId,
-            body);
-        Messages.Add(new MessageItemViewModel(sent));
-        await RefreshConversationsAsync();
+        var convId = SelectedConversation.Id;
+        try
+        {
+            ComposeText = string.Empty;
+            StatusText = "正在发送…";
+            var sent = await _client.SendTextMessageAsync(
+                convId,
+                SelectedConversation.ServiceId,
+                body);
+            Messages.Add(new MessageItemViewModel(sent));
+            await RefreshConversationsAsync();
+            StatusText = "已发送";
+        }
+        catch (Exception ex)
+        {
+            ComposeText = body;
+            StatusText = $"发送失败：{RootMessage(ex)}";
+        }
     }
 
     private async Task ListenEventsAsync(CancellationToken ct)
@@ -734,12 +853,25 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    public Task ShutdownAsync()
+    public async Task ShutdownAsync()
     {
-        _eventsCts?.Cancel();
-        ClearQr();
-        // Lifetime owned by DI ServiceProvider (IAsyncDisposable).
-        return Task.CompletedTask;
+        try
+        {
+            _eventsCts?.Cancel();
+            _eventsCts?.Dispose();
+            _eventsCts = null;
+            ClearQr();
+
+            // Stop message WebSocket / registration / provisioning before the process exits.
+            if (_client is IAsyncDisposable asyncDisposable)
+                await asyncDisposable.DisposeAsync();
+            else if (_client is IDisposable disposable)
+                disposable.Dispose();
+        }
+        catch
+        {
+            // Ignore cleanup errors during shutdown.
+        }
     }
 }
 
