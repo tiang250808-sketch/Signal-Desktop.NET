@@ -149,15 +149,16 @@ public class MainWindow : Window
 
     private UIElement BuildInstallModeToggle()
     {
-        return new Panel
+        return new StackPanel
         {
+            Orientation = Orientation.Horizontal,
             Height = 32,
             Children =
             {
                 new Button
                 {
                     Content = "关联设备",
-                    Width = 110,
+                    Width = 128,
                     Height = 30,
                     Commands =
                     {
@@ -170,9 +171,9 @@ public class MainWindow : Window
                 new Button
                 {
                     Content = "注册账户",
-                    Width = 110,
+                    Width = 128,
                     Height = 30,
-                    MarginLeft = 118,
+                    MarginLeft = 8,
                     Commands =
                     {
                         {
@@ -348,31 +349,11 @@ public class MainWindow : Window
                                     Height = 40,
                                     Children =
                                     {
-                                        new Ellipse
-                                        {
-                                            Width = 16,
-                                            Height = 16,
-                                            MarginLeft = 10,
-                                            MarginTop = 12,
-                                            Fill = null,
-                                            StrokeFill = "#6B7280",
-                                            IsAntiAlias = true,
-                                        },
-                                        new Ellipse
-                                        {
-                                            Width = 6,
-                                            Height = 6,
-                                            MarginLeft = 15,
-                                            MarginTop = 17,
-                                            Fill = "#6B7280",
-                                            StrokeFill = null,
-                                            IsAntiAlias = true,
-                                        },
                                         new TextBlock
                                         {
                                             FontSize = 14,
                                             Foreground = "#1B1B1B",
-                                            MarginLeft = 32,
+                                            MarginLeft = 12,
                                             MarginTop = 10,
                                             Bindings =
                                             {
@@ -382,14 +363,7 @@ public class MainWindow : Window
                                                 },
                                             },
                                         },
-                                        new TextBlock
-                                        {
-                                            Text = "▾",
-                                            FontSize = 10,
-                                            Foreground = "#6B7280",
-                                            MarginLeft = 78,
-                                            MarginTop = 11,
-                                        },
+                                        BuildCountryChevron(),
                                     },
                                 },
                             },
@@ -532,6 +506,25 @@ public class MainWindow : Window
                 },
             },
         };
+    }
+
+    /// <summary>Solid chevron matching the 14px country-code text height.</summary>
+    private static UIElement BuildCountryChevron()
+    {
+        var chevron = new Polygon
+        {
+            Width = 14,
+            Height = 14,
+            MarginLeft = 70,
+            MarginTop = 13,
+            Fill = "#6B7280",
+            StrokeFill = null,
+            IsAntiAlias = true,
+        };
+        chevron.Points.Add(new Point(0, 3));
+        chevron.Points.Add(new Point(14, 3));
+        chevron.Points.Add(new Point(7, 12));
+        return chevron;
     }
 
     private UIElement BuildRegisterFollowUpSteps()
