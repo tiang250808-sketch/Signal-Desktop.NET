@@ -1092,17 +1092,25 @@ public class MainWindow : Window
         return new Border
         {
             [DockPanel.Dock] = Dock.Left,
-            Width = 320,
+            Width = 321,
             Height = "100%",
             Background = "#FFFFFF",
-            BorderFill = "#E0E0E0",
-            BorderStroke = "0,0,1,0",
+            BorderFill = "Transparent",
             Child = new DockPanel
             {
                 Width = "100%",
                 Height = "100%",
                 Children =
                 {
+                    // Always-on splitter (independent of whether the message pane is shown).
+                    new Border
+                    {
+                        [DockPanel.Dock] = Dock.Right,
+                        Width = 1,
+                        Height = "100%",
+                        Background = "#E0E0E0",
+                        BorderFill = "Transparent",
+                    },
                     // Header: Chats + compose
                     new Border
                     {
@@ -1368,23 +1376,13 @@ public class MainWindow : Window
 
     private UIElement BuildChatThreadColumn()
     {
-        // Fill remaining DockPanel space (must be last undocked child).
+        // Always occupy the remaining space so the list/thread splitter stays visible
+        // even when no conversation is selected (message list hidden / empty state).
         return new Border
         {
             Width = "100%",
             Height = "100%",
             Background = "#FFFFFF",
-            Bindings =
-            {
-                {
-                    nameof(Visibility),
-                    nameof(MainViewModel.IsShowingChatMain),
-                    null,
-                    BindingMode.OneWay,
-                    BoolToVisibility,
-                    null
-                },
-            },
             Child = new DockPanel
             {
                 Width = "100%",
@@ -1400,6 +1398,17 @@ public class MainWindow : Window
                         Background = "#FFFFFF",
                         BorderFill = "#E0E0E0",
                         BorderStroke = "0,0,0,1",
+                        Bindings =
+                        {
+                            {
+                                nameof(Visibility),
+                                nameof(MainViewModel.IsShowingChatMain),
+                                null,
+                                BindingMode.OneWay,
+                                BoolToVisibility,
+                                null
+                            },
+                        },
                         Child = new DockPanel
                         {
                             Width = "100%",
@@ -1471,6 +1480,17 @@ public class MainWindow : Window
                         Background = "#FFFFFF",
                         BorderFill = "#E0E0E0",
                         BorderStroke = "0,1,0,0",
+                        Bindings =
+                        {
+                            {
+                                nameof(Visibility),
+                                nameof(MainViewModel.IsShowingChatMain),
+                                null,
+                                BindingMode.OneWay,
+                                BoolToVisibility,
+                                null
+                            },
+                        },
                         Child = new DockPanel
                         {
                             Width = "100%",
@@ -1555,6 +1575,17 @@ public class MainWindow : Window
                         Width = "100%",
                         Height = "100%",
                         Background = "#FFFFFF",
+                        Bindings =
+                        {
+                            {
+                                nameof(Visibility),
+                                nameof(MainViewModel.IsShowingChatMain),
+                                null,
+                                BindingMode.OneWay,
+                                BoolToVisibility,
+                                null
+                            },
+                        },
                         Children =
                         {
                             new ListBox
