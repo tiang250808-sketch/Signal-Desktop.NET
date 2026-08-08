@@ -1006,11 +1006,45 @@ public class MainWindow : Window
                     Children =
                     {
                         BuildChatNavRail(),
-                        BuildChatListColumn(),
-                        BuildChatThreadColumn(),
+                        new Panel
+                        {
+                            Width = "100%",
+                            Height = "100%",
+                            Children =
+                            {
+                                BuildChatsTab(),
+                                BuildCallsTab(),
+                                BuildStoriesTab(),
+                            },
+                        },
                     },
                 },
                 BuildSettingsPanel(),
+            },
+        };
+    }
+
+    private UIElement BuildChatsTab()
+    {
+        return new DockPanel
+        {
+            Width = "100%",
+            Height = "100%",
+            Bindings =
+            {
+                {
+                    nameof(Visibility),
+                    nameof(MainViewModel.IsShowingChatsTab),
+                    null,
+                    BindingMode.OneWay,
+                    BoolToVisibility,
+                    null
+                },
+            },
+            Children =
+            {
+                BuildChatListColumn(),
+                BuildChatThreadColumn(),
             },
         };
     }
@@ -1025,6 +1059,17 @@ public class MainWindow : Window
             Background = "#F2F2F2",
             BorderFill = "#E0E0E0",
             BorderStroke = "0,0,1,0",
+            Bindings =
+            {
+                {
+                    nameof(Visibility),
+                    nameof(MainViewModel.IsNavRailVisible),
+                    null,
+                    BindingMode.OneWay,
+                    BoolToVisibility,
+                    null
+                },
+            },
             Child = new DockPanel
             {
                 Width = "100%",
@@ -1047,14 +1092,22 @@ public class MainWindow : Window
                         MarginTop = 10,
                         Children =
                         {
-                            MakeNavButton("☰", () => _viewModel.ToggleSettingsCommand.Execute(null)),
-                            MakeNavButton("💬", () =>
-                            {
-                                _viewModel.SettingsOpen = false;
-                                _ = _viewModel.RefreshConversationsCommand.ExecuteAsync(null);
-                            }, selected: true, marginTop: 8),
-                            MakeNavButton("📞", () => _viewModel.StatusText = "通话功能尚未实现", marginTop: 8),
-                            MakeNavButton("▢", () => _viewModel.StatusText = "Stories 尚未实现", marginTop: 8),
+                            MakeNavButton("☰", () => _viewModel.ToggleNavRailCommand.Execute(null)),
+                            MakeNavButton(
+                                "💬",
+                                () => _viewModel.ShowChatsTabCommand.Execute(null),
+                                nameof(MainViewModel.IsChatsNavSelected),
+                                marginTop: 8),
+                            MakeNavButton(
+                                "📞",
+                                () => _viewModel.ShowCallsTabCommand.Execute(null),
+                                nameof(MainViewModel.IsCallsNavSelected),
+                                marginTop: 8),
+                            MakeNavButton(
+                                "▢",
+                                () => _viewModel.ShowStoriesTabCommand.Execute(null),
+                                nameof(MainViewModel.IsStoriesNavSelected),
+                                marginTop: 8),
                         },
                     },
                 },
@@ -1062,15 +1115,19 @@ public class MainWindow : Window
         };
     }
 
-    private static Button MakeNavButton(string glyph, Action onClick, bool selected = false, float marginTop = 0) =>
-        new()
+    private Button MakeNavButton(
+        string glyph,
+        Action onClick,
+        string? selectedProperty = null,
+        float marginTop = 0)
+    {
+        var button = new Button
         {
             Width = 48,
             Height = 48,
             MarginLeft = 10,
             MarginTop = marginTop,
-            // CPF ViewFill cannot parse null — use Transparent instead.
-            Background = selected ? "#E0E0E0" : "Transparent",
+            Background = "Transparent",
             BorderFill = "Transparent",
             CornerRadius = "12",
             Content = new TextBlock
@@ -1078,7 +1135,7 @@ public class MainWindow : Window
                 Text = glyph,
                 FontSize = 20,
                 Foreground = "#3B3B3B",
-                MarginLeft = selected ? 12 : 13,
+                MarginLeft = 13,
                 MarginTop = 10,
             },
             Commands =
@@ -1086,6 +1143,20 @@ public class MainWindow : Window
                 { nameof(Button.Click), (s, e) => onClick() },
             },
         };
+
+        if (selectedProperty is not null)
+        {
+            button.Bindings.Add(
+                nameof(Button.Background),
+                selectedProperty,
+                null,
+                BindingMode.OneWay,
+                a => a is true ? "#E0E0E0" : "Transparent",
+                null);
+        }
+
+        return button;
+    }
 
     private UIElement BuildChatListColumn()
     {
@@ -1165,13 +1236,44 @@ public class MainWindow : Window
                                         },
                                     },
                                 },
+                                // Shown when nav rail is collapsed — reopen the left menu.
+                                new Button
+                                {
+                                    [DockPanel.Dock] = Dock.Left,
+                                    Content = "☰",
+                                    Width = 36,
+                                    Height = 36,
+                                    MarginLeft = 8,
+                                    MarginTop = 10,
+                                    Background = "Transparent",
+                                    BorderFill = "Transparent",
+                                    Foreground = "#3B3B3B",
+                                    Commands =
+                                    {
+                                        {
+                                            nameof(Button.Click),
+                                            (s, e) => _viewModel.ToggleNavRailCommand.Execute(null)
+                                        },
+                                    },
+                                    Bindings =
+                                    {
+                                        {
+                                            nameof(Visibility),
+                                            nameof(MainViewModel.IsNavRailCollapsed),
+                                            null,
+                                            BindingMode.OneWay,
+                                            BoolToVisibility,
+                                            null
+                                        },
+                                    },
+                                },
                                 new TextBlock
                                 {
                                     Text = "Chats",
                                     FontSize = 24,
                                     FontStyle = FontStyles.Bold,
                                     Foreground = "#1B1B1B",
-                                    MarginLeft = 16,
+                                    MarginLeft = 12,
                                     MarginTop = 12,
                                 },
                             },
@@ -1229,143 +1331,38 @@ public class MainWindow : Window
                             },
                         },
                     },
-                    // New chat composer
-                    new Border
-                    {
-                        [DockPanel.Dock] = Dock.Top,
-                        Width = "100%",
-                        Padding = "12,0,12,10",
-                        Background = "#FAFAFA",
-                        Bindings =
-                        {
-                            {
-                                nameof(Visibility),
-                                nameof(MainViewModel.IsShowingNewChatPanel),
-                                null,
-                                BindingMode.OneWay,
-                                BoolToVisibility,
-                                null
-                            },
-                        },
-                        Child = new StackPanel
-                        {
-                            Width = "100%",
-                            Children =
-                            {
-                                new TextBlock
-                                {
-                                    Text = "New chat",
-                                    FontSize = 13,
-                                    FontStyle = FontStyles.Bold,
-                                    Foreground = "#1B1B1B",
-                                },
-                                new TextBox
-                                {
-                                    Width = "100%",
-                                    Height = 34,
-                                    MarginTop = 8,
-                                    Background = "#FFFFFF",
-                                    BorderFill = "#D0D0D0",
-                                    BorderStroke = "1",
-                                    CornerRadius = "8",
-                                    Padding = "8,7,8,7",
-                                    Bindings =
-                                    {
-                                        {
-                                            nameof(TextBox.Text),
-                                            nameof(MainViewModel.NewContactServiceId),
-                                            null,
-                                            BindingMode.TwoWay
-                                        },
-                                    },
-                                },
-                                new TextBox
-                                {
-                                    Width = "100%",
-                                    Height = 34,
-                                    MarginTop = 6,
-                                    Background = "#FFFFFF",
-                                    BorderFill = "#D0D0D0",
-                                    BorderStroke = "1",
-                                    CornerRadius = "8",
-                                    Padding = "8,7,8,7",
-                                    Bindings =
-                                    {
-                                        {
-                                            nameof(TextBox.Text),
-                                            nameof(MainViewModel.NewContactName),
-                                            null,
-                                            BindingMode.TwoWay
-                                        },
-                                    },
-                                },
-                                new TextBlock
-                                {
-                                    Text = "ACI (UUID) + optional display name",
-                                    FontSize = 11,
-                                    Foreground = "#8E8E8E",
-                                    MarginTop = 4,
-                                },
-                                new StackPanel
-                                {
-                                    Orientation = Orientation.Horizontal,
-                                    MarginTop = 8,
-                                    Children =
-                                    {
-                                        new Button
-                                        {
-                                            Content = "Start",
-                                            Width = 88,
-                                            Height = 32,
-                                            Background = SignalBlue,
-                                            Foreground = "#FFFFFF",
-                                            BorderFill = "Transparent",
-                                            CornerRadius = "8",
-                                            Commands =
-                                            {
-                                                {
-                                                    nameof(Button.Click),
-                                                    (s, e) => _ = _viewModel.AddContactCommand.ExecuteAsync(null)
-                                                },
-                                            },
-                                        },
-                                        new Button
-                                        {
-                                            Content = "Cancel",
-                                            Width = 88,
-                                            Height = 32,
-                                            MarginLeft = 8,
-                                            Background = "#E7E7E7",
-                                            Foreground = "#1B1B1B",
-                                            BorderFill = "Transparent",
-                                            CornerRadius = "8",
-                                            Commands =
-                                            {
-                                                {
-                                                    nameof(Button.Click),
-                                                    (s, e) => _viewModel.CloseNewChatCommand.Execute(null)
-                                                },
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    },
-                    new ListBox
+                    // Conversation list OR Signal-style New chat flow.
+                    new Panel
                     {
                         Width = "100%",
                         Height = "100%",
-                        Background = "#FFFFFF",
-                        ItemTemplate = typeof(ConversationListItem),
-                        Bindings =
+                        Children =
                         {
-                            { nameof(ListBox.Items), nameof(MainViewModel.FilteredConversations) },
+                            BuildNewChatPanel(),
+                            new ListBox
                             {
-                                nameof(ListBox.SelectedValue),
-                                nameof(MainViewModel.SelectedConversation),
-                                null,
-                                BindingMode.TwoWay
+                                Width = "100%",
+                                Height = "100%",
+                                Background = "#FFFFFF",
+                                ItemTemplate = typeof(ConversationListItem),
+                                Bindings =
+                                {
+                                    { nameof(ListBox.Items), nameof(MainViewModel.FilteredConversations) },
+                                    {
+                                        nameof(ListBox.SelectedValue),
+                                        nameof(MainViewModel.SelectedConversation),
+                                        null,
+                                        BindingMode.TwoWay
+                                    },
+                                    {
+                                        nameof(Visibility),
+                                        nameof(MainViewModel.IsShowingConversationList),
+                                        null,
+                                        BindingMode.OneWay,
+                                        BoolToVisibility,
+                                        null
+                                    },
+                                },
                             },
                         },
                     },
@@ -1373,6 +1370,496 @@ public class MainWindow : Window
             },
         };
     }
+
+    private UIElement BuildNewChatPanel()
+    {
+        return new Border
+        {
+            Width = "100%",
+            Height = "100%",
+            Background = "#FFFFFF",
+            Bindings =
+            {
+                {
+                    nameof(Visibility),
+                    nameof(MainViewModel.IsShowingNewChatPanel),
+                    null,
+                    BindingMode.OneWay,
+                    BoolToVisibility,
+                    null
+                },
+            },
+            Child = new DockPanel
+            {
+                Width = "100%",
+                Height = "100%",
+                Children =
+                {
+                    // Title bar: back + title
+                    new Border
+                    {
+                        [DockPanel.Dock] = Dock.Top,
+                        Width = "100%",
+                        Height = 52,
+                        Child = new DockPanel
+                        {
+                            Width = "100%",
+                            Height = "100%",
+                            Children =
+                            {
+                                new Button
+                                {
+                                    [DockPanel.Dock] = Dock.Left,
+                                    Content = "←",
+                                    Width = 40,
+                                    Height = 36,
+                                    MarginLeft = 8,
+                                    MarginTop = 8,
+                                    Background = "Transparent",
+                                    BorderFill = "Transparent",
+                                    Foreground = "#3B3B3B",
+                                    Commands =
+                                    {
+                                        {
+                                            nameof(Button.Click),
+                                            (s, e) => _viewModel.NewChatBackCommand.Execute(null)
+                                        },
+                                    },
+                                },
+                                new TextBlock
+                                {
+                                    FontSize = 18,
+                                    FontStyle = FontStyles.Bold,
+                                    Foreground = "#1B1B1B",
+                                    MarginLeft = 4,
+                                    MarginTop = 14,
+                                    Bindings =
+                                    {
+                                        { nameof(TextBlock.Text), nameof(MainViewModel.NewChatTitle) },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    // Home: create group / find username / find phone
+                    new StackPanel
+                    {
+                        Width = "100%",
+                        MarginTop = 8,
+                        Bindings =
+                        {
+                            {
+                                nameof(Visibility),
+                                nameof(MainViewModel.IsNewChatHome),
+                                null,
+                                BindingMode.OneWay,
+                                BoolToVisibility,
+                                null
+                            },
+                        },
+                        Children =
+                        {
+                            MakeComposeActionRow(
+                                "👥",
+                                "Create a group",
+                                "Start a group chat with multiple people",
+                                () => _viewModel.OpenCreateGroupStepCommand.Execute(null)),
+                            MakeComposeActionRow(
+                                "@",
+                                "Find by username",
+                                "Search for someone by their Signal username",
+                                () => _viewModel.OpenFindUsernameStepCommand.Execute(null)),
+                            MakeComposeActionRow(
+                                "📱",
+                                "Find by phone number",
+                                "Enter a phone number to start a chat",
+                                () => _viewModel.OpenFindPhoneStepCommand.Execute(null)),
+                            new TextBlock
+                            {
+                                Text = "Contacts",
+                                FontSize = 13,
+                                FontStyle = FontStyles.Bold,
+                                Foreground = "#6B6B6B",
+                                MarginLeft = 16,
+                                MarginTop = 16,
+                                MarginBottom = 4,
+                            },
+                            new ListBox
+                            {
+                                Width = "100%",
+                                Height = 280,
+                                Background = "#FFFFFF",
+                                ItemTemplate = typeof(ContactPickListItem),
+                                Bindings =
+                                {
+                                    { nameof(ListBox.Items), nameof(MainViewModel.Contacts) },
+                                    {
+                                        nameof(ListBox.SelectedValue),
+                                        nameof(MainViewModel.SelectedComposeContact),
+                                        null,
+                                        BindingMode.TwoWay
+                                    },
+                                },
+                            },
+                            new TextBlock
+                            {
+                                Text = "Or paste an ACI UUID below",
+                                FontSize = 11,
+                                Foreground = "#8E8E8E",
+                                MarginLeft = 16,
+                                MarginTop = 8,
+                            },
+                            new TextBox
+                            {
+                                Width = "100%",
+                                Height = 34,
+                                MarginLeft = 12,
+                                MarginRight = 12,
+                                MarginTop = 6,
+                                Background = "#F0F0F0",
+                                BorderFill = "Transparent",
+                                CornerRadius = "8",
+                                Padding = "8,7,8,7",
+                                Bindings =
+                                {
+                                    {
+                                        nameof(TextBox.Text),
+                                        nameof(MainViewModel.NewContactServiceId),
+                                        null,
+                                        BindingMode.TwoWay
+                                    },
+                                },
+                            },
+                            new Button
+                            {
+                                Content = "Start chat with ACI",
+                                Width = 180,
+                                Height = 34,
+                                MarginLeft = 12,
+                                MarginTop = 8,
+                                Background = SignalBlue,
+                                Foreground = "#FFFFFF",
+                                BorderFill = "Transparent",
+                                CornerRadius = "8",
+                                Commands =
+                                {
+                                    {
+                                        nameof(Button.Click),
+                                        (s, e) => _ = _viewModel.AddContactCommand.ExecuteAsync(null)
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    // Find by username
+                    new StackPanel
+                    {
+                        Width = "100%",
+                        MarginTop = 12,
+                        MarginLeft = 16,
+                        MarginRight = 16,
+                        Bindings =
+                        {
+                            {
+                                nameof(Visibility),
+                                nameof(MainViewModel.IsNewChatFindUsername),
+                                null,
+                                BindingMode.OneWay,
+                                BoolToVisibility,
+                                null
+                            },
+                        },
+                        Children =
+                        {
+                            new TextBlock
+                            {
+                                Text = "Enter a username",
+                                FontSize = 14,
+                                Foreground = "#1B1B1B",
+                            },
+                            new TextBox
+                            {
+                                Width = "100%",
+                                Height = 40,
+                                MarginTop = 10,
+                                Background = "#F0F0F0",
+                                BorderFill = "Transparent",
+                                CornerRadius = "10",
+                                Padding = "12,10,12,10",
+                                FontSize = 15,
+                                Bindings =
+                                {
+                                    {
+                                        nameof(TextBox.Text),
+                                        nameof(MainViewModel.FindUsernameQuery),
+                                        null,
+                                        BindingMode.TwoWay
+                                    },
+                                },
+                            },
+                            new TextBlock
+                            {
+                                Text = "Usernames look like @nickname.xx",
+                                FontSize = 12,
+                                Foreground = "#8E8E8E",
+                                MarginTop = 8,
+                            },
+                            new Button
+                            {
+                                Content = "Next",
+                                Width = "100%",
+                                Height = 40,
+                                MarginTop = 16,
+                                Background = SignalBlue,
+                                Foreground = "#FFFFFF",
+                                BorderFill = "Transparent",
+                                CornerRadius = "10",
+                                Commands =
+                                {
+                                    {
+                                        nameof(Button.Click),
+                                        (s, e) => _ = _viewModel.StartChatByUsernameCommand.ExecuteAsync(null)
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    // Find by phone
+                    new StackPanel
+                    {
+                        Width = "100%",
+                        MarginTop = 12,
+                        MarginLeft = 16,
+                        MarginRight = 16,
+                        Bindings =
+                        {
+                            {
+                                nameof(Visibility),
+                                nameof(MainViewModel.IsNewChatFindPhone),
+                                null,
+                                BindingMode.OneWay,
+                                BoolToVisibility,
+                                null
+                            },
+                        },
+                        Children =
+                        {
+                            new TextBlock
+                            {
+                                Text = "Enter a phone number",
+                                FontSize = 14,
+                                Foreground = "#1B1B1B",
+                            },
+                            new TextBox
+                            {
+                                Width = "100%",
+                                Height = 40,
+                                MarginTop = 10,
+                                Background = "#F0F0F0",
+                                BorderFill = "Transparent",
+                                CornerRadius = "10",
+                                Padding = "12,10,12,10",
+                                FontSize = 15,
+                                Bindings =
+                                {
+                                    {
+                                        nameof(TextBox.Text),
+                                        nameof(MainViewModel.FindPhoneQuery),
+                                        null,
+                                        BindingMode.TwoWay
+                                    },
+                                },
+                            },
+                            new TextBlock
+                            {
+                                Text = "Include country code, e.g. +8613812345678",
+                                FontSize = 12,
+                                Foreground = "#8E8E8E",
+                                MarginTop = 8,
+                            },
+                            new Button
+                            {
+                                Content = "Next",
+                                Width = "100%",
+                                Height = 40,
+                                MarginTop = 16,
+                                Background = SignalBlue,
+                                Foreground = "#FFFFFF",
+                                BorderFill = "Transparent",
+                                CornerRadius = "10",
+                                Commands =
+                                {
+                                    {
+                                        nameof(Button.Click),
+                                        (s, e) => _ = _viewModel.StartChatByPhoneCommand.ExecuteAsync(null)
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    // Create group
+                    new StackPanel
+                    {
+                        Width = "100%",
+                        MarginTop = 12,
+                        MarginLeft = 16,
+                        MarginRight = 16,
+                        Bindings =
+                        {
+                            {
+                                nameof(Visibility),
+                                nameof(MainViewModel.IsNewChatCreateGroup),
+                                null,
+                                BindingMode.OneWay,
+                                BoolToVisibility,
+                                null
+                            },
+                        },
+                        Children =
+                        {
+                            new TextBlock
+                            {
+                                Text = "Group name",
+                                FontSize = 14,
+                                Foreground = "#1B1B1B",
+                            },
+                            new TextBox
+                            {
+                                Width = "100%",
+                                Height = 40,
+                                MarginTop = 8,
+                                Background = "#F0F0F0",
+                                BorderFill = "Transparent",
+                                CornerRadius = "10",
+                                Padding = "12,10,12,10",
+                                FontSize = 15,
+                                Bindings =
+                                {
+                                    {
+                                        nameof(TextBox.Text),
+                                        nameof(MainViewModel.NewGroupName),
+                                        null,
+                                        BindingMode.TwoWay
+                                    },
+                                },
+                            },
+                            new TextBlock
+                            {
+                                Text = "Members (ACI / phone, comma-separated)",
+                                FontSize = 14,
+                                Foreground = "#1B1B1B",
+                                MarginTop = 14,
+                            },
+                            new TextBox
+                            {
+                                Width = "100%",
+                                Height = 80,
+                                MarginTop = 8,
+                                Background = "#F0F0F0",
+                                BorderFill = "Transparent",
+                                CornerRadius = "10",
+                                Padding = "12,10,12,10",
+                                FontSize = 14,
+                                AcceptsReturn = true,
+                                Bindings =
+                                {
+                                    {
+                                        nameof(TextBox.Text),
+                                        nameof(MainViewModel.NewGroupMembersText),
+                                        null,
+                                        BindingMode.TwoWay
+                                    },
+                                },
+                            },
+                            new TextBlock
+                            {
+                                Text = "You can add members later. Group messaging sync is limited in this build.",
+                                FontSize = 12,
+                                Foreground = "#8E8E8E",
+                                MarginTop = 8,
+                            },
+                            new Button
+                            {
+                                Content = "Create",
+                                Width = "100%",
+                                Height = 40,
+                                MarginTop = 16,
+                                Background = SignalBlue,
+                                Foreground = "#FFFFFF",
+                                BorderFill = "Transparent",
+                                CornerRadius = "10",
+                                Commands =
+                                {
+                                    {
+                                        nameof(Button.Click),
+                                        (s, e) => _ = _viewModel.CreateGroupCommand.ExecuteAsync(null)
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    private Button MakeComposeActionRow(string glyph, string title, string subtitle, Action onClick) =>
+        new()
+        {
+            Width = "100%",
+            Height = 64,
+            MarginLeft = 8,
+            MarginRight = 8,
+            MarginTop = 4,
+            Background = "Transparent",
+            BorderFill = "Transparent",
+            CornerRadius = "10",
+            Content = new Panel
+            {
+                Width = "100%",
+                Height = "100%",
+                Children =
+                {
+                    new Border
+                    {
+                        Width = 40,
+                        Height = 40,
+                        MarginLeft = 8,
+                        MarginTop = 12,
+                        Background = "#E8EEF9",
+                        CornerRadius = "20",
+                        Child = new TextBlock
+                        {
+                            Text = glyph,
+                            FontSize = 16,
+                            MarginLeft = 11,
+                            MarginTop = 9,
+                        },
+                    },
+                    new TextBlock
+                    {
+                        Text = title,
+                        FontSize = 15,
+                        FontStyle = FontStyles.Bold,
+                        Foreground = "#1B1B1B",
+                        MarginLeft = 60,
+                        MarginTop = 12,
+                    },
+                    new TextBlock
+                    {
+                        Text = subtitle,
+                        FontSize = 12,
+                        Foreground = "#8E8E8E",
+                        MarginLeft = 60,
+                        MarginTop = 34,
+                    },
+                },
+            },
+            Commands =
+            {
+                { nameof(Button.Click), (s, e) => onClick() },
+            },
+        };
 
     private UIElement BuildChatThreadColumn()
     {
@@ -1668,6 +2155,464 @@ public class MainWindow : Window
                                     },
                                 },
                             },
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    private UIElement BuildCallsTab()
+    {
+        return new DockPanel
+        {
+            Width = "100%",
+            Height = "100%",
+            Background = "#FFFFFF",
+            Bindings =
+            {
+                {
+                    nameof(Visibility),
+                    nameof(MainViewModel.IsShowingCallsTab),
+                    null,
+                    BindingMode.OneWay,
+                    BoolToVisibility,
+                    null
+                },
+            },
+            Children =
+            {
+                // Calls list pane
+                new Border
+                {
+                    [DockPanel.Dock] = Dock.Left,
+                    Width = 321,
+                    Height = "100%",
+                    Background = "#FFFFFF",
+                    Child = new DockPanel
+                    {
+                        Width = "100%",
+                        Height = "100%",
+                        Children =
+                        {
+                            new Border
+                            {
+                                [DockPanel.Dock] = Dock.Right,
+                                Width = 1,
+                                Height = "100%",
+                                Background = "#E0E0E0",
+                                BorderFill = "Transparent",
+                            },
+                            new Border
+                            {
+                                [DockPanel.Dock] = Dock.Top,
+                                Width = "100%",
+                                Height = 56,
+                                Child = new DockPanel
+                                {
+                                    Width = "100%",
+                                    Height = "100%",
+                                    Children =
+                                    {
+                                        new Button
+                                        {
+                                            [DockPanel.Dock] = Dock.Right,
+                                            Content = "+",
+                                            Width = 36,
+                                            Height = 36,
+                                            MarginTop = 10,
+                                            MarginRight = 12,
+                                            Background = "Transparent",
+                                            BorderFill = "Transparent",
+                                            Foreground = "#3B3B3B",
+                                            Commands =
+                                            {
+                                                {
+                                                    nameof(Button.Click),
+                                                    (s, e) => _viewModel.StatusText = "新建通话尚未实现"
+                                                },
+                                            },
+                                        },
+                                        new Button
+                                        {
+                                            [DockPanel.Dock] = Dock.Left,
+                                            Content = "☰",
+                                            Width = 36,
+                                            Height = 36,
+                                            MarginLeft = 8,
+                                            MarginTop = 10,
+                                            Background = "Transparent",
+                                            BorderFill = "Transparent",
+                                            Foreground = "#3B3B3B",
+                                            Commands =
+                                            {
+                                                {
+                                                    nameof(Button.Click),
+                                                    (s, e) => _viewModel.ToggleNavRailCommand.Execute(null)
+                                                },
+                                            },
+                                            Bindings =
+                                            {
+                                                {
+                                                    nameof(Visibility),
+                                                    nameof(MainViewModel.IsNavRailCollapsed),
+                                                    null,
+                                                    BindingMode.OneWay,
+                                                    BoolToVisibility,
+                                                    null
+                                                },
+                                            },
+                                        },
+                                        new TextBlock
+                                        {
+                                            Text = "Calls",
+                                            FontSize = 24,
+                                            FontStyle = FontStyles.Bold,
+                                            Foreground = "#1B1B1B",
+                                            MarginLeft = 12,
+                                            MarginTop = 12,
+                                        },
+                                    },
+                                },
+                            },
+                            new StackPanel
+                            {
+                                Width = "100%",
+                                MarginTop = 80,
+                                Children =
+                                {
+                                    new TextBlock
+                                    {
+                                        Text = "No calls yet",
+                                        FontSize = 16,
+                                        FontStyle = FontStyles.Bold,
+                                        Foreground = "#1B1B1B",
+                                        TextAlignment = TextAlignment.Center,
+                                        Width = 300,
+                                        MarginLeft = 10,
+                                    },
+                                    new TextBlock
+                                    {
+                                        Text = "Voice and video call history will appear here.",
+                                        FontSize = 13,
+                                        Foreground = "#8E8E8E",
+                                        TextAlignment = TextAlignment.Center,
+                                        Width = 300,
+                                        MarginLeft = 10,
+                                        MarginTop = 8,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                // Calls detail / empty state
+                new StackPanel
+                {
+                    Width = 420,
+                    MarginTop = 200,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = "📞",
+                            FontSize = 48,
+                            TextAlignment = TextAlignment.Center,
+                            Width = 420,
+                        },
+                        new TextBlock
+                        {
+                            Text = "No call selected",
+                            FontSize = 20,
+                            FontStyle = FontStyles.Bold,
+                            Foreground = "#1B1B1B",
+                            TextAlignment = TextAlignment.Center,
+                            Width = 420,
+                            MarginTop = 12,
+                        },
+                        new TextBlock
+                        {
+                            Text = "Start a call from a chat, or view call history on the left.",
+                            FontSize = 14,
+                            Foreground = "#8E8E8E",
+                            TextAlignment = TextAlignment.Center,
+                            Width = 420,
+                            MarginTop = 8,
+                        },
+                    },
+                    Bindings =
+                    {
+                        {
+                            nameof(MarginLeft),
+                            nameof(MainViewModel.IsShowingCallsTab),
+                            null,
+                            BindingMode.OneWay,
+                            _ => (object)"auto",
+                            null
+                        },
+                        {
+                            nameof(MarginRight),
+                            nameof(MainViewModel.IsShowingCallsTab),
+                            null,
+                            BindingMode.OneWay,
+                            _ => (object)"auto",
+                            null
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    private UIElement BuildStoriesTab()
+    {
+        return new DockPanel
+        {
+            Width = "100%",
+            Height = "100%",
+            Background = "#FFFFFF",
+            Bindings =
+            {
+                {
+                    nameof(Visibility),
+                    nameof(MainViewModel.IsShowingStoriesTab),
+                    null,
+                    BindingMode.OneWay,
+                    BoolToVisibility,
+                    null
+                },
+            },
+            Children =
+            {
+                // Stories list pane
+                new Border
+                {
+                    [DockPanel.Dock] = Dock.Left,
+                    Width = 321,
+                    Height = "100%",
+                    Background = "#FFFFFF",
+                    Child = new DockPanel
+                    {
+                        Width = "100%",
+                        Height = "100%",
+                        Children =
+                        {
+                            new Border
+                            {
+                                [DockPanel.Dock] = Dock.Right,
+                                Width = 1,
+                                Height = "100%",
+                                Background = "#E0E0E0",
+                                BorderFill = "Transparent",
+                            },
+                            new Border
+                            {
+                                [DockPanel.Dock] = Dock.Top,
+                                Width = "100%",
+                                Height = 56,
+                                Child = new DockPanel
+                                {
+                                    Width = "100%",
+                                    Height = "100%",
+                                    Children =
+                                    {
+                                        new Button
+                                        {
+                                            [DockPanel.Dock] = Dock.Right,
+                                            Content = "+",
+                                            Width = 36,
+                                            Height = 36,
+                                            MarginTop = 10,
+                                            MarginRight = 12,
+                                            Background = "Transparent",
+                                            BorderFill = "Transparent",
+                                            Foreground = "#3B3B3B",
+                                            Commands =
+                                            {
+                                                {
+                                                    nameof(Button.Click),
+                                                    (s, e) => _viewModel.StatusText = "发布动态尚未实现"
+                                                },
+                                            },
+                                        },
+                                        new Button
+                                        {
+                                            [DockPanel.Dock] = Dock.Left,
+                                            Content = "☰",
+                                            Width = 36,
+                                            Height = 36,
+                                            MarginLeft = 8,
+                                            MarginTop = 10,
+                                            Background = "Transparent",
+                                            BorderFill = "Transparent",
+                                            Foreground = "#3B3B3B",
+                                            Commands =
+                                            {
+                                                {
+                                                    nameof(Button.Click),
+                                                    (s, e) => _viewModel.ToggleNavRailCommand.Execute(null)
+                                                },
+                                            },
+                                            Bindings =
+                                            {
+                                                {
+                                                    nameof(Visibility),
+                                                    nameof(MainViewModel.IsNavRailCollapsed),
+                                                    null,
+                                                    BindingMode.OneWay,
+                                                    BoolToVisibility,
+                                                    null
+                                                },
+                                            },
+                                        },
+                                        new TextBlock
+                                        {
+                                            Text = "Stories",
+                                            FontSize = 24,
+                                            FontStyle = FontStyles.Bold,
+                                            Foreground = "#1B1B1B",
+                                            MarginLeft = 12,
+                                            MarginTop = 12,
+                                        },
+                                    },
+                                },
+                            },
+                            // My Story row
+                            new Border
+                            {
+                                [DockPanel.Dock] = Dock.Top,
+                                Width = "100%",
+                                Height = 72,
+                                MarginLeft = 8,
+                                MarginRight = 8,
+                                MarginTop = 4,
+                                Background = "#F7F7F7",
+                                CornerRadius = "10",
+                                Child = new Panel
+                                {
+                                    Width = "100%",
+                                    Height = "100%",
+                                    Children =
+                                    {
+                                        new Border
+                                        {
+                                            Width = 48,
+                                            Height = 48,
+                                            MarginLeft = 12,
+                                            MarginTop = 12,
+                                            Background = SignalBlue,
+                                            CornerRadius = "24",
+                                            Child = new TextBlock
+                                            {
+                                                Text = "+",
+                                                FontSize = 22,
+                                                Foreground = "#FFFFFF",
+                                                MarginLeft = 16,
+                                                MarginTop = 8,
+                                            },
+                                        },
+                                        new TextBlock
+                                        {
+                                            Text = "My Story",
+                                            FontSize = 15,
+                                            FontStyle = FontStyles.Bold,
+                                            Foreground = "#1B1B1B",
+                                            MarginLeft = 72,
+                                            MarginTop = 16,
+                                        },
+                                        new TextBlock
+                                        {
+                                            Text = "Tap to add a story",
+                                            FontSize = 13,
+                                            Foreground = "#8E8E8E",
+                                            MarginLeft = 72,
+                                            MarginTop = 38,
+                                        },
+                                    },
+                                },
+                            },
+                            new StackPanel
+                            {
+                                Width = "100%",
+                                MarginTop = 40,
+                                Children =
+                                {
+                                    new TextBlock
+                                    {
+                                        Text = "No stories yet",
+                                        FontSize = 16,
+                                        FontStyle = FontStyles.Bold,
+                                        Foreground = "#1B1B1B",
+                                        TextAlignment = TextAlignment.Center,
+                                        Width = 300,
+                                        MarginLeft = 10,
+                                    },
+                                    new TextBlock
+                                    {
+                                        Text = "Stories from your contacts will show up here.",
+                                        FontSize = 13,
+                                        Foreground = "#8E8E8E",
+                                        TextAlignment = TextAlignment.Center,
+                                        Width = 300,
+                                        MarginLeft = 10,
+                                        MarginTop = 8,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                // Stories viewer empty state
+                new StackPanel
+                {
+                    Width = 420,
+                    MarginTop = 200,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = "▢",
+                            FontSize = 48,
+                            TextAlignment = TextAlignment.Center,
+                            Width = 420,
+                        },
+                        new TextBlock
+                        {
+                            Text = "Click on a story to view it",
+                            FontSize = 20,
+                            FontStyle = FontStyles.Bold,
+                            Foreground = "#1B1B1B",
+                            TextAlignment = TextAlignment.Center,
+                            Width = 420,
+                            MarginTop = 12,
+                        },
+                        new TextBlock
+                        {
+                            Text = "Stories disappear after 24 hours.",
+                            FontSize = 14,
+                            Foreground = "#8E8E8E",
+                            TextAlignment = TextAlignment.Center,
+                            Width = 420,
+                            MarginTop = 8,
+                        },
+                    },
+                    Bindings =
+                    {
+                        {
+                            nameof(MarginLeft),
+                            nameof(MainViewModel.IsShowingStoriesTab),
+                            null,
+                            BindingMode.OneWay,
+                            _ => (object)"auto",
+                            null
+                        },
+                        {
+                            nameof(MarginRight),
+                            nameof(MainViewModel.IsShowingStoriesTab),
+                            null,
+                            BindingMode.OneWay,
+                            _ => (object)"auto",
+                            null
                         },
                     },
                 },

@@ -273,6 +273,40 @@ public sealed class SignalClientOrchestrator : ISignalSidecarClient, IAsyncDispo
         await _state.EmitAsync(new SidecarEvent.ConversationUpdated(conv), cancellationToken);
     }
 
+    public async Task<Conversation> CreateGroupConversationAsync(
+        string title,
+        IReadOnlyList<string> memberServiceIds,
+        CancellationToken cancellationToken = default)
+    {
+        var name = string.IsNullOrWhiteSpace(title) ? "Group" : title.Trim();
+        var id = "group:" + Guid.NewGuid().ToString("N");
+        var preview = memberServiceIds.Count == 0
+            ? "New group"
+            : $"{memberServiceIds.Count} members";
+        var conv = new Conversation(
+            Id: id,
+            ServiceId: null,
+            Title: name,
+            LastMessagePreview: preview,
+            LastMessageAtMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            UnreadCount: 0,
+            IsGroup: true);
+        await _messages.UpsertConversationAsync(conv, cancellationToken);
+
+        foreach (var member in memberServiceIds.Where(m => !string.IsNullOrWhiteSpace(m)))
+        {
+            var mid = member.Trim();
+            await _messages.UpsertContactAsync(new Storage.ContactRecord
+            {
+                ServiceId = mid,
+                ProfileName = mid,
+            }, cancellationToken);
+        }
+
+        await _state.EmitAsync(new SidecarEvent.ConversationUpdated(conv), cancellationToken);
+        return conv;
+    }
+
     public Task<ClientSettings> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
         var (account, protocol) = _state.Snapshot();

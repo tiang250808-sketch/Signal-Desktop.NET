@@ -65,6 +65,12 @@ public interface ISignalSidecarClient : IAsyncDisposable
         ContactInfo contact,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Create a local group conversation and return it.</summary>
+    Task<Conversation> CreateGroupConversationAsync(
+        string title,
+        IReadOnlyList<string> memberServiceIds,
+        CancellationToken cancellationToken = default);
+
     Task<ClientSettings> GetSettingsAsync(CancellationToken cancellationToken = default);
 
     Task UpdateSettingsAsync(

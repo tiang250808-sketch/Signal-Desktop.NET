@@ -128,6 +128,9 @@ public partial class MainViewModel : ObservableObject
     private ConversationItemViewModel? _selectedConversation;
 
     [ObservableProperty]
+    private ContactItemViewModel? _selectedComposeContact;
+
+    [ObservableProperty]
     private string _composeText = string.Empty;
 
     [ObservableProperty]
@@ -135,12 +138,61 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsShowingNewChatPanel))]
+    [NotifyPropertyChangedFor(nameof(IsShowingConversationList))]
+    [NotifyPropertyChangedFor(nameof(IsNewChatHome))]
+    [NotifyPropertyChangedFor(nameof(IsNewChatFindUsername))]
+    [NotifyPropertyChangedFor(nameof(IsNewChatFindPhone))]
+    [NotifyPropertyChangedFor(nameof(IsNewChatCreateGroup))]
+    [NotifyPropertyChangedFor(nameof(NewChatTitle))]
     private bool _isNewChatOpen;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNewChatHome))]
+    [NotifyPropertyChangedFor(nameof(IsNewChatFindUsername))]
+    [NotifyPropertyChangedFor(nameof(IsNewChatFindPhone))]
+    [NotifyPropertyChangedFor(nameof(IsNewChatCreateGroup))]
+    [NotifyPropertyChangedFor(nameof(NewChatTitle))]
+    private NewChatStep _newChatStep = NewChatStep.Home;
+
+    [ObservableProperty]
+    private string _findUsernameQuery = string.Empty;
+
+    [ObservableProperty]
+    private string _findPhoneQuery = string.Empty;
+
+    [ObservableProperty]
+    private string _newGroupName = string.Empty;
+
+    [ObservableProperty]
+    private string _newGroupMembersText = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsShowingSettings))]
     [NotifyPropertyChangedFor(nameof(IsShowingChatMain))]
+    [NotifyPropertyChangedFor(nameof(IsShowingChatsTab))]
+    [NotifyPropertyChangedFor(nameof(IsShowingCallsTab))]
+    [NotifyPropertyChangedFor(nameof(IsShowingStoriesTab))]
+    [NotifyPropertyChangedFor(nameof(IsShowingNewChatPanel))]
+    [NotifyPropertyChangedFor(nameof(IsShowingConversationList))]
     private bool _settingsOpen;
+
+    /// <summary>Left module nav rail (Signal hamburger toggles this).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNavRailCollapsed))]
+    private bool _isNavRailVisible = true;
+
+    public bool IsNavRailCollapsed => !IsNavRailVisible;
+
+    /// <summary>Signal desktop primary tabs: Chats / Calls / Stories.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsShowingChatsTab))]
+    [NotifyPropertyChangedFor(nameof(IsShowingCallsTab))]
+    [NotifyPropertyChangedFor(nameof(IsShowingStoriesTab))]
+    [NotifyPropertyChangedFor(nameof(IsShowingChatMain))]
+    [NotifyPropertyChangedFor(nameof(IsChatsNavSelected))]
+    [NotifyPropertyChangedFor(nameof(IsCallsNavSelected))]
+    [NotifyPropertyChangedFor(nameof(IsStoriesNavSelected))]
+    private MainNavTab _mainNavTab = MainNavTab.Chats;
 
     [ObservableProperty]
     private string _settingsSummary = string.Empty;
@@ -159,13 +211,34 @@ public partial class MainViewModel : ObservableObject
 
     public bool IsShowingInstallScreen => !IsRegistered;
     public bool IsShowingChat => IsRegistered;
-    public bool IsShowingChatMain => IsRegistered && !SettingsOpen;
+    public bool IsShowingChatsTab => IsRegistered && !SettingsOpen && MainNavTab == MainNavTab.Chats;
+    public bool IsShowingCallsTab => IsRegistered && !SettingsOpen && MainNavTab == MainNavTab.Calls;
+    public bool IsShowingStoriesTab => IsRegistered && !SettingsOpen && MainNavTab == MainNavTab.Stories;
+    public bool IsShowingChatMain => IsShowingChatsTab;
     public bool IsShowingSettings => IsRegistered && SettingsOpen;
-    public bool IsShowingNewChatPanel => IsRegistered && IsNewChatOpen && !SettingsOpen;
+    public bool IsShowingNewChatPanel => IsShowingChatsTab && IsNewChatOpen;
+    public bool IsShowingConversationList => IsShowingChatsTab && !IsNewChatOpen;
+    public bool IsNewChatHome => IsShowingNewChatPanel && NewChatStep == NewChatStep.Home;
+    public bool IsNewChatFindUsername => IsShowingNewChatPanel && NewChatStep == NewChatStep.FindUsername;
+    public bool IsNewChatFindPhone => IsShowingNewChatPanel && NewChatStep == NewChatStep.FindPhone;
+    public bool IsNewChatCreateGroup => IsShowingNewChatPanel && NewChatStep == NewChatStep.CreateGroup;
+
+    public string NewChatTitle => NewChatStep switch
+    {
+        NewChatStep.FindUsername => "Find by username",
+        NewChatStep.FindPhone => "Find by phone number",
+        NewChatStep.CreateGroup => "Create a group",
+        _ => "New chat",
+    };
+
     public bool IsShowingLinkMode => !IsRegistered && !IsRegisterMode;
     public bool IsShowingRegisterMode => !IsRegistered && IsRegisterMode;
     public bool IsShowingQrCard =>
         !IsRegistered && !IsRegisterMode && !IsLinkInProgress && !IsQrLoading;
+
+    public bool IsChatsNavSelected => MainNavTab == MainNavTab.Chats;
+    public bool IsCallsNavSelected => MainNavTab == MainNavTab.Calls;
+    public bool IsStoriesNavSelected => MainNavTab == MainNavTab.Stories;
 
     public bool HasSelectedConversation => SelectedConversation is not null;
     public string SelectedConversationTitle => SelectedConversation?.Title ?? "Signal";
@@ -640,13 +713,48 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ToggleNewChat()
     {
-        IsNewChatOpen = !IsNewChatOpen;
         if (IsNewChatOpen)
-            SettingsOpen = false;
+        {
+            CloseNewChat();
+            return;
+        }
+
+        SettingsOpen = false;
+        NewChatStep = NewChatStep.Home;
+        IsNewChatOpen = true;
+        _ = RefreshContactsAsync();
     }
 
     [RelayCommand]
-    private void CloseNewChat() => IsNewChatOpen = false;
+    private void CloseNewChat()
+    {
+        IsNewChatOpen = false;
+        NewChatStep = NewChatStep.Home;
+        FindUsernameQuery = string.Empty;
+        FindPhoneQuery = string.Empty;
+        NewGroupName = string.Empty;
+        NewGroupMembersText = string.Empty;
+        NewContactServiceId = string.Empty;
+        NewContactName = string.Empty;
+    }
+
+    [RelayCommand]
+    private void NewChatBack()
+    {
+        if (NewChatStep == NewChatStep.Home)
+            CloseNewChat();
+        else
+            NewChatStep = NewChatStep.Home;
+    }
+
+    [RelayCommand]
+    private void OpenCreateGroupStep() => NewChatStep = NewChatStep.CreateGroup;
+
+    [RelayCommand]
+    private void OpenFindUsernameStep() => NewChatStep = NewChatStep.FindUsername;
+
+    [RelayCommand]
+    private void OpenFindPhoneStep() => NewChatStep = NewChatStep.FindPhone;
 
     private async Task<string> RegisteredNumberAsync()
     {
@@ -688,6 +796,36 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void ToggleNavRail() => IsNavRailVisible = !IsNavRailVisible;
+
+    [RelayCommand]
+    private void ShowChatsTab()
+    {
+        SettingsOpen = false;
+        MainNavTab = MainNavTab.Chats;
+        StatusText = "Chats";
+        _ = RefreshConversationsCommand.ExecuteAsync(null);
+    }
+
+    [RelayCommand]
+    private void ShowCallsTab()
+    {
+        SettingsOpen = false;
+        IsNewChatOpen = false;
+        MainNavTab = MainNavTab.Calls;
+        StatusText = "Calls";
+    }
+
+    [RelayCommand]
+    private void ShowStoriesTab()
+    {
+        SettingsOpen = false;
+        IsNewChatOpen = false;
+        MainNavTab = MainNavTab.Stories;
+        StatusText = "Stories";
+    }
+
+    [RelayCommand]
     private void ToggleSettings()
     {
         SettingsOpen = !SettingsOpen;
@@ -719,19 +857,108 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var id = NewContactServiceId.Trim();
-        var name = string.IsNullOrWhiteSpace(NewContactName) ? id : NewContactName.Trim();
+        await OpenDirectChatAsync(
+            NewContactServiceId.Trim(),
+            number: null,
+            displayName: string.IsNullOrWhiteSpace(NewContactName) ? null : NewContactName.Trim());
+    }
+
+    [RelayCommand]
+    private async Task StartChatByUsernameAsync()
+    {
+        var raw = FindUsernameQuery.Trim().TrimStart('@');
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            StatusText = "请输入用户名";
+            return;
+        }
+
+        // Official username→ACI directory lookup is not wired yet; accept ACI UUID or create a local placeholder.
+        if (LooksLikeUuid(raw))
+        {
+            await OpenDirectChatAsync(raw, number: null, displayName: raw);
+            return;
+        }
+
+        var localId = "username:" + raw.ToLowerInvariant();
+        await OpenDirectChatAsync(localId, number: null, displayName: "@" + raw);
+        StatusText = $"已创建与 @{raw} 的本地会话（用户名目录查询尚未接入服务器）";
+    }
+
+    [RelayCommand]
+    private async Task StartChatByPhoneAsync()
+    {
+        var e164 = NormalizeLookupPhone(FindPhoneQuery);
+        if (e164 is null)
+        {
+            StatusText = "请输入有效手机号（E.164，如 +8613812345678）";
+            return;
+        }
+
+        // Phone→ACI CDSI lookup is not wired; open a local conversation keyed by E.164.
+        await OpenDirectChatAsync(e164, number: e164, displayName: e164);
+        StatusText = $"已创建与 {e164} 的本地会话（手机号目录查询尚未接入服务器）";
+    }
+
+    [RelayCommand]
+    private async Task CreateGroupAsync()
+    {
+        if (string.IsNullOrWhiteSpace(NewGroupName))
+        {
+            StatusText = "请输入群组名称";
+            return;
+        }
+
+        var members = NewGroupMembersText
+            .Split([',', ';', '\n', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        try
+        {
+            var conv = await _client.CreateGroupConversationAsync(NewGroupName.Trim(), members);
+            CloseNewChat();
+            await RefreshContactsAsync();
+            await RefreshConversationsAsync();
+            SelectedConversation = Conversations.FirstOrDefault(c => c.Id == conv.Id);
+            StatusText = members.Count == 0
+                ? $"已创建群组「{conv.Title}」"
+                : $"已创建群组「{conv.Title}」（{members.Count} 名成员）";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"创建群组失败：{RootMessage(ex)}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task StartChatWithContactAsync(ContactItemViewModel? contact)
+    {
+        if (contact is null)
+            return;
+        await OpenDirectChatAsync(contact.ServiceId, number: null, displayName: contact.DisplayName);
+    }
+
+    partial void OnSelectedComposeContactChanged(ContactItemViewModel? value)
+    {
+        if (value is null || !IsNewChatHome)
+            return;
+        _ = StartChatWithContactAsync(value);
+        SelectedComposeContact = null;
+    }
+
+    private async Task OpenDirectChatAsync(string serviceId, string? number, string? displayName)
+    {
+        var id = serviceId.Trim();
+        var name = string.IsNullOrWhiteSpace(displayName) ? id : displayName.Trim();
         try
         {
             await _client.UpsertContactAsync(new ContactInfo(
                 id,
-                Number: null,
+                Number: number,
                 ProfileName: name,
                 About: null));
-            NewContactServiceId = string.Empty;
-            NewContactName = string.Empty;
-            SettingsOpen = false;
-            IsNewChatOpen = false;
+            CloseNewChat();
             await RefreshContactsAsync();
             await RefreshConversationsAsync();
             SelectedConversation = Conversations.FirstOrDefault(c => c.Id == id);
@@ -739,8 +966,24 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusText = $"添加联系人失败：{RootMessage(ex)}";
+            StatusText = $"打开会话失败：{RootMessage(ex)}";
         }
+    }
+
+    private static bool LooksLikeUuid(string value) =>
+        Guid.TryParse(value.Trim(), out _);
+
+    private static string? NormalizeLookupPhone(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+        var digits = new string(raw.Where(c => char.IsDigit(c) || c == '+').ToArray());
+        if (!digits.StartsWith('+'))
+            digits = "+" + digits.TrimStart('0');
+        var national = digits[1..];
+        if (national.Length is < 6 or > 15 || !national.All(char.IsDigit))
+            return null;
+        return digits;
     }
 
     [RelayCommand]
@@ -970,10 +1213,33 @@ public sealed class ConversationItemViewModel(Conversation model) : ObservableOb
     }
 }
 
+public enum MainNavTab
+{
+    Chats = 0,
+    Calls = 1,
+    Stories = 2,
+}
+
+public enum NewChatStep
+{
+    Home = 0,
+    CreateGroup = 1,
+    FindUsername = 2,
+    FindPhone = 3,
+}
+
 public sealed class ContactItemViewModel(ContactInfo model) : ObservableObject
 {
     public string ServiceId { get; } = model.ServiceId;
     public string DisplayName { get; } = model.ProfileName ?? model.Number ?? model.ServiceId;
+    public string Initial
+    {
+        get
+        {
+            var t = DisplayName.Trim().TrimStart('@');
+            return t.Length == 0 ? "?" : char.ToUpperInvariant(t[0]).ToString();
+        }
+    }
 }
 
 public sealed class MessageItemViewModel : ObservableObject
